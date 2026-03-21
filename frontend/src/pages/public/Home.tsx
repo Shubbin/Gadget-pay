@@ -1,0 +1,313 @@
+import { Link } from 'react-router-dom';
+import { ArrowRight, Shield, Clock, CreditCard, CheckCircle, Star, Smartphone, Laptop, Tablet, Headphones, Loader2, ShoppingBag } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import ProductCard from '@/components/ProductCard';
+import { productService } from '@/services';
+import { motion, Variants } from 'framer-motion';
+
+const fadeIn: Variants = {
+  hidden: { opacity: 0, y: 30 },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] as any }
+  }
+};
+
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.2
+    }
+  }
+};
+
+const steps = [
+  { icon: Smartphone, title: 'Pick Your Gadget', desc: 'Check out our shop for the best gadgets from top brands.' },
+  { icon: CreditCard, title: 'Choose a Plan', desc: 'Pick a simple payment plan — pay daily, weekly, or monthly.' },
+  { icon: CheckCircle, title: 'Get Approved Instantly', desc: 'Quick approval process. No hidden fees, no surprises.' },
+  { icon: Shield, title: 'Enjoy Your Device', desc: 'Receive your gadget and pay comfortably over time.' },
+];
+
+const benefits = [
+  { icon: Clock, title: 'Flexible Schedules', desc: 'Daily, weekly, or monthly — you choose your payment rhythm.' },
+  { icon: Shield, title: 'Zero Hidden Fees', desc: 'Transparent pricing with no surprise charges.' },
+  { icon: CreditCard, title: 'Instant Approval', desc: 'Get approved in minutes with our streamlined process.' },
+];
+
+const testimonials = [
+  { name: 'Sarah M.', role: 'Designer', text: 'GadgetFlex made it possible to get my MacBook Pro without breaking the bank. The monthly payments are very manageable!', rating: 5 },
+  { name: 'James K.', role: 'Developer', text: 'I couldn\'t afford a new laptop upfront. GadgetFlex let me get one and pay weekly. Incredible service!', rating: 5 },
+  { name: 'Amara O.', role: 'Business Owner', text: 'I got phones for my whole team. Being able to pay bit by bit is a life saver.', rating: 5 },
+];
+
+const categories = [
+  { icon: Laptop, label: 'Laptops', count: 24 },
+  { icon: Smartphone, label: 'Phones', count: 36 },
+  { icon: Tablet, label: 'Tablets', count: 18 },
+  { icon: Headphones, label: 'Accessories', count: 42 },
+];
+
+export default function Home() {
+  const { data: products = [], isLoading } = useQuery({
+    queryKey: ['featured-products'],
+    queryFn: () => productService.getAll()
+  });
+
+  const featuredProducts = products.slice(0, 4);
+
+  return (
+    <div className="bg-white min-h-screen selection:bg-primary/10">
+      {/* Hero */}
+      <section className="relative overflow-hidden pt-20 pb-20 lg:pt-32 lg:pb-40 mesh-gradient-elite">
+        {/* Elite Background elements */}
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 blur-[120px] rounded-full animate-pulse" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-400/5 blur-[120px] rounded-full animate-pulse delay-700" />
+        
+        <div className="container relative z-10 mx-auto px-4">
+          <motion.div 
+            initial="hidden" 
+            animate="visible" 
+            variants={fadeIn}
+            className="mx-auto max-w-6xl text-center"
+          >
+            <div className="inline-flex items-center gap-2 rounded-full glass-card px-6 py-2.5 text-[10px] font-black uppercase tracking-[0.25em] text-primary mb-12 shadow-premium">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+              </span>
+              Shop now, pay later
+            </div>
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.8 }}
+              className="mt-8 text-xl text-muted-foreground/80 max-w-2xl mx-auto leading-relaxed md:text-2xl font-medium"
+            >
+              Get the latest gadgets and pay in easy monthly bits. 
+              <span className="block text-primary font-bold mt-2">Built for every Nigerian.</span>
+            </motion.p>
+            
+            <h1 className="mb-10 text-6xl font-black leading-[0.9] tracking-[-0.04em] text-foreground md:text-8xl lg:text-[11rem]">
+              Get your gadgets.<br />
+              <span className="bg-gradient-to-r from-primary via-blue-600 to-indigo-600 bg-clip-text text-transparent italic text-shadow-sm">Pay in bits.</span>
+            </h1>
+            
+            
+            <div className="flex flex-col items-center justify-center gap-6 sm:flex-row">
+              <Link to="/marketplace">
+                <Button className="h-16 px-12 rounded-2xl bg-primary text-white font-black hover:bg-primary/90 transition-all shadow-2xl shadow-primary/40 text-lg uppercase tracking-widest group">
+                  <ShoppingBag className="mr-3 h-5 w-5 transition-transform group-hover:scale-110" /> Start Shopping
+                </Button>
+              </Link>
+              <Link to="/calculator">
+                <Button variant="outline" className="h-16 px-12 rounded-2xl border-slate-200 bg-white/50 backdrop-blur-md text-foreground font-bold hover:bg-white transition-all text-lg shadow-premium">
+                  Analyze Plans
+                </Button>
+              </Link>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Categories */}
+      <section className="relative z-10 -mt-10 mb-20">
+        <div className="container mx-auto px-4">
+          <motion.div 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={staggerContainer}
+            className="grid grid-cols-1 gap-4 md:grid-cols-4"
+          >
+            {categories.map(cat => (
+              <motion.div key={cat.label} variants={fadeIn}>
+                <Link to={`/marketplace?category=${cat.label}`} className="group relative flex items-center gap-4 rounded-2xl border border-border bg-white p-5 transition-all hover:border-primary/50 shadow-sm hover:shadow-md">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-50 transition-colors group-hover:bg-primary/10">
+                    <cat.icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold tracking-tight text-foreground uppercase">{cat.label}</p>
+                    <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">{cat.count}+ units</p>
+                  </div>
+                </Link>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Featured Products */}
+      <section className="py-24">
+        <div className="container mx-auto px-4">
+          <div className="mb-12 flex flex-col items-end justify-between gap-6 md:flex-row">
+            <div className="max-w-2xl">
+              <p className="text-[10px] font-bold text-primary uppercase tracking-[0.3em] mb-4">Top Picks</p>
+              <h2 className="text-4xl lg:text-5xl font-black tracking-tighter text-foreground">Trending Gadgets</h2>
+              <p className="mt-4 text-xl font-medium text-muted-foreground/60">Check out our most popular items available on easy payment plans.</p>
+            </div>
+            <Link to="/marketplace">
+              <Button variant="link" className="h-12 text-base font-bold text-primary p-0">
+                Browse Full Catalog <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-[400px] rounded-3xl bg-slate-50 border border-border animate-pulse" />
+              ))
+            ) : (
+              featuredProducts.map((product, i) => (
+                <motion.div 
+                  key={product.id} 
+                  initial="hidden" 
+                  whileInView="visible" 
+                  viewport={{ once: true }}
+                  variants={fadeIn}
+                  transition={{ delay: i * 0.1 }}
+                >
+                  <ProductCard product={product} />
+                </motion.div>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section className="bg-slate-50/50 py-32">
+        <div className="container mx-auto px-4">
+          <div className="mb-20 text-center">
+            <p className="text-[10px] font-bold text-primary uppercase tracking-[0.3em] mb-4">How it works</p>
+            <h2 className="text-4xl lg:text-5xl font-black tracking-tighter text-foreground">Four easy steps</h2>
+            <p className="mx-auto mt-4 max-w-2xl text-xl font-medium text-muted-foreground/60">Getting your dream gadget is as simple as 1, 2, 3, 4.</p>
+          </div>
+          <div className="grid gap-8 md:grid-cols-4">
+            {steps.map((step, i) => (
+              <motion.div 
+                key={i} 
+                initial="hidden" 
+                whileInView="visible" 
+                viewport={{ once: true }} 
+                variants={fadeIn}
+                transition={{ delay: i * 0.1 }}
+                className="text-center bg-white p-10 rounded-3xl border border-border shadow-sm hover:shadow-md transition-all"
+              >
+                <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary text-white shadow-lg">
+                  <step.icon className="h-10 w-10" />
+                </div>
+                <h3 className="mb-4 text-xl font-black tracking-tight text-foreground uppercase text-[12px] tracking-widest">{step.title}</h3>
+                <p className="text-sm font-medium leading-relaxed text-muted-foreground/60">{step.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Benefits */}
+      <section className="py-32">
+        <div className="container mx-auto px-4">
+          <div className="mb-20">
+            <p className="text-[10px] font-bold text-primary uppercase tracking-[0.3em] mb-4">Why choose us</p>
+            <h2 className="text-4xl lg:text-5xl font-black tracking-tighter text-foreground">The GadgetFlex way</h2>
+            <p className="mt-4 text-xl font-medium text-muted-foreground/60">We make it easy for you to own the best technology.</p>
+          </div>
+          <div className="grid gap-6 md:grid-cols-3">
+            {benefits.map((b, i) => (
+              <motion.div 
+                key={i} 
+                initial="hidden" 
+                whileInView="visible" 
+                viewport={{ once: true }} 
+                variants={fadeIn}
+                transition={{ delay: i * 0.1 }}
+                className="rounded-3xl border border-border bg-white p-10 transition-all hover:bg-slate-50"
+              >
+                <div className="mb-8 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/5">
+                  <b.icon className="h-8 w-8 text-primary" />
+                </div>
+                <h3 className="mb-4 text-xl font-black tracking-tight text-foreground uppercase text-[12px] tracking-widest">{b.title}</h3>
+                <p className="text-base font-medium leading-relaxed text-muted-foreground/60">{b.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <section className="bg-slate-50/50 py-32">
+        <div className="container mx-auto px-4">
+          <div className="mb-20 text-center">
+            <p className="text-[10px] font-bold text-primary uppercase tracking-[0.3em] mb-4">Wall of fame</p>
+            <h2 className="text-4xl lg:text-5xl font-black tracking-tighter text-foreground">What our customers say</h2>
+            <p className="mt-4 text-lg text-muted-foreground/60 font-medium max-w-2xl mx-auto">
+              Join thousands of Nigerians using GadgetFlex to upgrade their lives with smart, manageable payments.
+            </p>
+          </div>
+          <div className="grid gap-8 md:grid-cols-3">
+            {testimonials.map((t, i) => (
+              <motion.div 
+                key={i} 
+                initial="hidden" 
+                whileInView="visible" 
+                viewport={{ once: true }} 
+                variants={fadeIn}
+                transition={{ delay: i * 0.1 }}
+                className="rounded-3xl border border-border bg-white p-10 shadow-sm hover:shadow-md transition-all"
+              >
+                <div className="mb-6 flex gap-1">
+                  {Array.from({ length: t.rating }).map((_, j) => (
+                    <Star key={j} className="h-3 w-3 fill-primary text-primary" />
+                  ))}
+                </div>
+                <p className="mb-10 text-lg font-medium italic leading-relaxed text-muted-foreground/80">"{t.text}"</p>
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-full bg-slate-100 border border-border overflow-hidden p-1 shadow-inner">
+                    <div className="w-full h-full rounded-full bg-primary/10 flex items-center justify-center font-black text-primary text-[10px]">
+                      {t.name.charAt(0)}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="font-bold tracking-tight text-foreground uppercase text-[10px] tracking-widest">{t.name}</p>
+                    <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">{t.role}</p>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="py-24">
+        <div className="container mx-auto px-4 text-center">
+          <motion.div 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={fadeIn}
+            className="relative rounded-[3rem] bg-primary py-24 px-10 lg:py-32 overflow-hidden shadow-2xl"
+          >
+            <div className="absolute top-0 right-0 w-full h-full bg-[url('/grid.svg')] opacity-[0.05] pointer-events-none" />
+            <h2 className="mb-8 text-4xl font-black tracking-tighter text-white lg:text-7xl leading-none">
+              Get your gadget today.
+            </h2>
+            <p className="mx-auto mb-12 max-w-xl text-xl font-bold text-white/60 leading-relaxed italic">
+              Don't let anything hold you back. Upgrade your tech now and pay as you go.
+            </p>
+            <Link to="/register">
+              <Button size="lg" className="h-20 rounded-2xl bg-white px-16 text-xl font-black text-primary hover:bg-slate-50 transition-all shadow-xl uppercase tracking-widest">
+                Sign Up Now <ArrowRight className="ml-2 h-6 w-6" />
+              </Button>
+            </Link>
+          </motion.div>
+        </div>
+      </section>
+    </div>
+  );
+}
