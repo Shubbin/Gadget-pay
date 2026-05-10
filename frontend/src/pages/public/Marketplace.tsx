@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ProductCard from '@/components/ProductCard';
+import ProductCardSkeleton from '@/components/skeletons/ProductCardSkeleton';
 import { productService } from '@/services';
 
 const brands = ['All', 'Apple', 'Samsung', 'Dell', 'Sony'];
@@ -96,9 +97,10 @@ export default function Marketplace() {
         </p>
 
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-32">
-            <Loader2 className="h-12 w-12 text-primary animate-spin mb-6" />
-            <p className="text-muted-foreground/60 font-bold uppercase tracking-widest text-[10px]">Loading products...</p>
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <ProductCardSkeleton key={i} />
+            ))}
           </div>
         ) : isError ? (
           <div className="flex flex-col items-center justify-center rounded-[3rem] border border-red-500/10 bg-white py-24 text-center shadow-sm">

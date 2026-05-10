@@ -44,7 +44,11 @@ export default function Navbar() {
 
 
         <div className="flex items-center gap-4">
-          <Link to="/marketplace" className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 text-muted-foreground/60 transition-all hover:bg-white hover:text-primary border border-slate-100">
+          <Link 
+            to="/marketplace" 
+            className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 text-muted-foreground/60 transition-all hover:bg-white hover:text-primary border border-slate-100"
+            aria-label={`Shopping cart with ${cartCount} items`}
+          >
             <ShoppingCart className="h-4 w-4" />
             {cartCount > 0 && (
               <Badge className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary p-0 text-[8px] font-black text-white ring-2 ring-white">
@@ -78,6 +82,7 @@ export default function Navbar() {
           <button 
             className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/5 md:hidden" 
             onClick={() => setMobileOpen(!mobileOpen)}
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
           >
             {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>

@@ -37,7 +37,8 @@ export default function AssistantChat() {
     try {
       const { data } = await api.post('/ai/chat', { message: userMessage });
       setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Chat API Error:', error?.response?.data || error.message);
       setMessages(prev => [...prev, { role: 'assistant', content: "I'm sorry, I'm having trouble connecting right now. Please try again later." }]);
     } finally {
       setIsLoading(false);
@@ -66,7 +67,13 @@ export default function AssistantChat() {
                     <p className="mt-1 text-[10px] uppercase tracking-widest opacity-70">Always Active</p>
                   </div>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="hover:bg-white/10 rounded-full h-8 w-8">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => setIsOpen(false)} 
+                  className="hover:bg-white/10 rounded-full h-8 w-8"
+                  aria-label="Close assistant"
+                >
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -80,7 +87,7 @@ export default function AssistantChat() {
                         <div className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${m.role === 'assistant' ? 'bg-primary text-primary-foreground' : 'bg-white/10 text-white'}`}>
                           {m.role === 'assistant' ? <Bot className="h-4 w-4" /> : <User className="h-4 w-4" />}
                         </div>
-                        <div className={`rounded-3xl px-5 py-3 text-sm font-medium leading-relaxed ${m.role === 'user' ? 'bg-primary text-primary-foreground rounded-tr-none' : 'bg-white/5 text-white rounded-tl-none border border-white/5'}`}>
+                        <div className={`rounded-3xl px-5 py-3 text-sm font-semibold leading-relaxed ${m.role === 'user' ? 'bg-primary text-white rounded-tr-none' : 'bg-slate-100 text-slate-900 rounded-tl-none border border-slate-200 shadow-sm'}`}>
                           {m.content}
                         </div>
                       </div>
@@ -92,7 +99,7 @@ export default function AssistantChat() {
                         <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
                           <Bot className="h-4 w-4" />
                         </div>
-                        <div className="rounded-3xl bg-white/5 px-5 py-3 text-sm rounded-tl-none border border-white/5">
+                        <div className="rounded-3xl bg-slate-100 px-5 py-3 text-sm rounded-tl-none border border-slate-200">
                           <Loader2 className="h-4 w-4 animate-spin text-primary" />
                         </div>
                       </div>
@@ -110,13 +117,14 @@ export default function AssistantChat() {
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                     placeholder="Ask about plans or gadgets..."
-                    className="w-full rounded-2xl border border-white/10 bg-white/5 py-4 pl-6 pr-14 text-sm font-medium text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    className="w-full rounded-2xl border border-slate-200 bg-white py-4 pl-6 pr-14 text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/50 shadow-inner"
                   />
                   <Button
                     size="icon"
                     onClick={handleSend}
                     disabled={!input.trim() || isLoading}
                     className="absolute right-2 top-2 h-10 w-10 rounded-xl bg-primary hover:bg-primary/90 transition-all"
+                    aria-label="Send message"
                   >
                     <Send className="h-4 w-4" />
                   </Button>
@@ -131,6 +139,7 @@ export default function AssistantChat() {
         size="icon"
         onClick={() => setIsOpen(!isOpen)}
         className={`h-16 w-16 rounded-full shadow-2xl transition-all duration-500 hover:scale-110 active:scale-95 ${isOpen ? 'bg-white text-primary rotate-90' : 'bg-primary text-primary-foreground'}`}
+        aria-label={isOpen ? "Close AI Assistant" : "Open AI Assistant"}
       >
         {isOpen ? <X className="h-8 w-8" /> : <MessageCircle className="h-8 w-8" />}
       </Button>

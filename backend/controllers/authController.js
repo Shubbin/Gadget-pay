@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const { query } = require('../config/db');
+const User = require('../models/User');
+const UserTier = require('../models/UserTier');
 const { sendOTP } = require('../services/emailService');
 
 const generateToken = (id) => {
@@ -11,23 +11,26 @@ exports.register = async (req, res) => {
   const { name, email, password } = req.body;
 
   try {
-    const hashedPassword = await bcrypt.hash(password, 10);
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp_expires_at = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    const { rows } = await query(
-      'INSERT INTO users (name, email, password, otp_code, otp_expires_at) VALUES ($1, $2, $3, $4, NOW() + interval \'10 minutes\') RETURNING id, name, email, role',
-      [name, email, hashedPassword, otp]
-    );
+    // User model hashes password in pre-save hook
+    const user = new User({
+      name,
+      email,
+      password,
+      otp_code: otp,
+      otp_expires_at
+    });
 
-    const user = rows[0];
+    await user.save();
     
-    // Send OTP via SendGrid (Now Brevo Mocked)
     await sendOTP(email, otp);
 
     res.status(201).json({
       message: 'Registration successful. Please verify your email.',
       email: user.email,
-      otp: otp // TEMPORARY: Exposing for inspection as requested
+      otp: otp // TEMPORARY: Exposing for inspection
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -37,32 +40,30 @@ exports.register = async (req, res) => {
 exports.verifyOTP = async (req, res) => {
   const { email, otp } = req.body;
   try {
-    const { rows } = await query(
-      'SELECT * FROM users WHERE email = $1 AND otp_code = $2 AND otp_expires_at > NOW()',
-      [email, otp]
-    );
+    const user = await User.findOne({
+      email,
+      otp_code: otp,
+      otp_expires_at: { $gt: new Date() }
+    });
 
-    if (rows.length === 0) {
-      console.log('OTP invalid or expired (DB side check)');
+    if (!user) {
       return res.status(400).json({ error: 'Invalid or expired OTP' });
     }
 
-    await query(
-      'UPDATE users SET is_verified = TRUE, otp_code = NULL, otp_expires_at = NULL WHERE email = $1',
-      [email]
-    );
+    user.is_verified = true;
+    user.otp_code = undefined;
+    user.otp_expires_at = undefined;
+    await user.save();
 
-    const user = rows[0];
     res.json({
       message: 'Account verified successfully',
-      id: user.id,
+      id: user._id,
       name: user.name,
       email: user.email,
       role: user.role,
-      token: generateToken(user.id),
+      token: generateToken(user._id),
     });
   } catch (error) {
-    console.error('Verification Error:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -71,20 +72,22 @@ exports.resendOTP = async (req, res) => {
   const { email } = req.body;
   try {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp_expires_at = new Date(Date.now() + 10 * 60 * 1000);
 
-    const { rowCount } = await query(
-      'UPDATE users SET otp_code = $1, otp_expires_at = NOW() + interval \'10 minutes\' WHERE email = $2 AND is_verified = FALSE',
-      [otp, email]
+    const user = await User.findOneAndUpdate(
+      { email, is_verified: false },
+      { otp_code: otp, otp_expires_at },
+      { new: true }
     );
 
-    if (rowCount === 0) {
+    if (!user) {
       return res.status(400).json({ error: 'User not found or already verified' });
     }
 
     await sendOTP(email, otp);
     res.json({ 
       message: 'New OTP sent to your email',
-      otp: otp // TEMPORARY: Exposing for inspection as requested
+      otp: otp 
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -95,14 +98,7 @@ exports.login = async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const { rows } = await query(
-      `SELECT u.*, t.name as tier_name 
-       FROM users u 
-       LEFT JOIN user_tiers t ON u.tier_id = t.id 
-       WHERE u.email = $1`,
-      [email]
-    );
-    const user = rows[0];
+    const user = await User.findOne({ email }).populate('tier_id');
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
@@ -112,20 +108,22 @@ exports.login = async (req, res) => {
       return res.status(403).json({ error: 'Please verify your email before logging in', unverified: true });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     res.json({
-      id: user.id,
+      id: user._id,
       name: user.name,
       email: user.email,
       role: user.role,
-      tier: user.tier_name || 'Bronze',
+      tier: user.tier_id?.name || user.tier || 'Bronze',
       risk_score: user.risk_score,
       credit_limit: user.credit_limit,
-      token: generateToken(user.id),
+      card_design: user.card_design,
+      is_card_active: user.is_card_active,
+      token: generateToken(user._id),
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -133,17 +131,34 @@ exports.login = async (req, res) => {
 };
 
 exports.getProfile = async (req, res) => {
+  // req.user is already populated in protect middleware
   res.json(req.user);
 };
 
 exports.updateProfile = async (req, res) => {
-  const { name } = req.body;
+  const { name, card_design, is_card_active } = req.body;
   try {
-    const { rows } = await query(
-      'UPDATE users SET name = $1 WHERE id = $2 RETURNING id, name, email, role',
-      [name, req.user.id]
-    );
-    res.json(rows[0]);
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: { name, card_design, is_card_active } },
+      { new: true }
+    ).select('-password');
+    
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.activateCard = async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: { is_card_active: true } },
+      { new: true }
+    ).select('id name is_card_active');
+    
+    res.json(user);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

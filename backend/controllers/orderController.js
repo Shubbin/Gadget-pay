@@ -1,16 +1,21 @@
-const { query } = require('../config/db');
+const Order = require('../models/Order');
+const Installment = require('../models/Installment');
+const Product = require('../models/Product');
+const settlementService = require('../services/SettlementService');
 
 exports.getOrders = async (req, res) => {
   try {
-    const { rows } = await query(
-      `SELECT o.*, p.name as product_name, p.image_url 
-       FROM orders o 
-       JOIN products p ON o.product_id = p.id 
-       WHERE o.user_id = $1 
-       ORDER BY o.created_at DESC`,
-      [req.user.id]
-    );
-    res.json(rows);
+    const orders = await Order.find({ user_id: req.user.id })
+      .populate('product_id')
+      .sort({ created_at: -1 });
+
+    const result = orders.map(o => ({
+      ...o.toObject(),
+      product_name: o.product_id?.name,
+      image_url: o.product_id?.image_url
+    }));
+
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -19,11 +24,26 @@ exports.getOrders = async (req, res) => {
 exports.createOrder = async (req, res) => {
   const { productId, totalAmount, insuranceId } = req.body;
   try {
-    const { rows } = await query(
-      'INSERT INTO orders (user_id, product_id, total_amount, insurance_id, status) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [req.user.id, productId, totalAmount, insuranceId, 'pending']
-    );
-    res.status(201).json(rows[0]);
+    const product = await Product.findById(productId);
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+
+    const order = new Order({
+      user_id: req.user.id,
+      product_id: productId,
+      vendor_id: product.vendor_id,
+      total_amount: totalAmount,
+      insurance_id: insuranceId,
+      status: 'pending'
+    });
+    
+    await order.save();
+
+    // Process financial split
+    if (order.vendor_id) {
+      await settlementService.processOrderCommission(order._id);
+    }
+
+    res.status(201).json(order);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -31,17 +51,24 @@ exports.createOrder = async (req, res) => {
 
 exports.getOrderStats = async (req, res) => {
   try {
-    const { rows: counts } = await query(
-      "SELECT status, COUNT(*) FROM orders WHERE user_id = $1 GROUP BY status",
-      [req.user.id]
-    );
-    const { rows: balance } = await query(
-      "SELECT SUM(remaining_balance) as total_debt FROM installments i JOIN orders o ON i.order_id = o.id WHERE o.user_id = $1",
-      [req.user.id]
-    );
+    const counts = await Order.aggregate([
+      { $match: { user_id: mongoose.Types.ObjectId(req.user.id) } },
+      { $group: { _id: "$status", count: { $sum: 1 } } }
+    ]);
+
+    const installments = await Installment.find()
+      .populate({
+        path: 'order_id',
+        match: { user_id: req.user.id }
+      });
+
+    const totalBalance = installments
+      .filter(i => i.order_id != null)
+      .reduce((sum, i) => sum + (i.remaining_balance || 0), 0);
+
     res.json({
-      counts,
-      totalBalance: parseFloat(balance[0].total_debt || 0)
+      counts: counts.map(c => ({ status: c._id, count: c.count })),
+      totalBalance
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

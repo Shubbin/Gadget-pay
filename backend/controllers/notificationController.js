@@ -1,12 +1,10 @@
-const { query } = require('../config/db');
+const Notification = require('../models/Notification');
 
 exports.getNotifications = async (req, res) => {
   try {
-    const { rows } = await query(
-      'SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC',
-      [req.user.id]
-    );
-    res.json(rows);
+    const notifications = await Notification.find({ user_id: req.user.id })
+      .sort({ created_at: -1 });
+    res.json(notifications);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -14,9 +12,9 @@ exports.getNotifications = async (req, res) => {
 
 exports.markAsRead = async (req, res) => {
   try {
-    await query(
-      'UPDATE notifications SET is_read = true WHERE id = $1 AND user_id = $2',
-      [req.params.id, req.user.id]
+    await Notification.findOneAndUpdate(
+      { _id: req.params.id, user_id: req.user.id },
+      { is_read: true }
     );
     res.json({ message: 'Notification marked as read' });
   } catch (error) {

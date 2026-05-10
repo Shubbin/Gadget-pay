@@ -1,16 +1,10 @@
-const { query } = require('../config/db');
+const Wishlist = require('../models/Wishlist');
 
 exports.getWishlist = async (req, res) => {
   try {
-    const { rows } = await query(
-      `SELECT p.* 
-       FROM wishlist w
-       JOIN products p ON w.product_id = p.id
-       WHERE w.user_id = $1`,
-      [req.user.id]
-    );
-
-    res.json(rows);
+    const items = await Wishlist.find({ user_id: req.user.id }).populate('product_id');
+    const result = items.map(i => i.product_id).filter(p => p != null);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -18,12 +12,12 @@ exports.getWishlist = async (req, res) => {
 
 exports.addToWishlist = async (req, res) => {
   try {
-    const { rows } = await query(
-      'INSERT INTO wishlist (user_id, product_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING *',
-      [req.user.id, req.body.productId]
+    const item = await Wishlist.findOneAndUpdate(
+      { user_id: req.user.id, product_id: req.body.productId },
+      { user_id: req.user.id, product_id: req.body.productId },
+      { upsert: true, new: true }
     );
-
-    res.status(201).json(rows[0] || { message: 'Already in wishlist' });
+    res.status(201).json(item);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -31,12 +25,12 @@ exports.addToWishlist = async (req, res) => {
 
 exports.removeFromWishlist = async (req, res) => {
   try {
-    const { rowCount } = await query(
-      'DELETE FROM wishlist WHERE user_id = $1 AND product_id = $2',
-      [req.user.id, req.params.productId]
-    );
+    const result = await Wishlist.findOneAndDelete({ 
+      user_id: req.user.id, 
+      product_id: req.params.productId 
+    });
 
-    if (rowCount === 0) return res.status(404).json({ error: 'Item not found in wishlist' });
+    if (!result) return res.status(404).json({ error: 'Item not found in wishlist' });
     res.json({ message: 'Removed from wishlist' });
   } catch (error) {
     res.status(500).json({ error: error.message });

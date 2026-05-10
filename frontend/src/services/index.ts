@@ -17,7 +17,8 @@ export const authService = {
   forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }).then(res => res.data),
   resetPassword: (token: string, password: string) => api.post('/auth/reset-password', { token, password }).then(res => res.data),
   getProfile: () => api.get('/auth/profile').then(res => res.data),
-  updateProfile: (data: { name: string }) => api.put('/auth/profile', data).then(res => res.data),
+  updateProfile: (data: { name?: string; card_design?: string; is_card_active?: boolean }) => api.put('/auth/profile', data).then(res => res.data),
+  activateCard: () => api.post('/auth/activate-card').then(res => res.data),
 };
 
 export const orderService = {
@@ -28,7 +29,7 @@ export const orderService = {
 };
 
 export const installmentService = {
-  getAll: () => api.get('/installments').then(res => res.data),
+  getAll: () => api.get('/installments').then(res => ({ ...res, data: res.data || [] })),
   getById: (id: string) => api.get(`/installments/${id}`).then(res => res.data),
   calculate: (params: any) => api.post('/installments/calculate', params).then(res => res.data),
   create: (data: any) => api.post('/installments/create', data).then(res => res.data),

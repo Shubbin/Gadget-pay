@@ -1,21 +1,14 @@
-const { query } = require('../config/db');
+const CartItem = require('../models/CartItem');
 
 exports.getCart = async (req, res) => {
   try {
-    const { rows } = await query(
-      `SELECT c.quantity, 
-        json_build_object(
-          'id', p.id, 'name', p.name, 'brand', p.brand, 
-          'price', p.price, 'category', p.category, 
-          'image_url', p.image_url
-        ) as products
-       FROM cart_items c
-       JOIN products p ON c.product_id = p.id
-       WHERE c.user_id = $1`,
-      [req.user.id]
-    );
-
-    res.json(rows.map(item => ({ product: item.products, quantity: item.quantity })));
+    const items = await CartItem.find({ user_id: req.user.id }).populate('product_id');
+    const result = items.map(item => ({
+      product: item.product_id,
+      quantity: item.quantity
+    })).filter(i => i.product != null);
+    
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -24,16 +17,12 @@ exports.getCart = async (req, res) => {
 exports.addToCart = async (req, res) => {
   const { productId, quantity = 1 } = req.body;
   try {
-    const { rows } = await query(
-      `INSERT INTO cart_items (user_id, product_id, quantity) 
-       VALUES ($1, $2, $3) 
-       ON CONFLICT (user_id, product_id) 
-       DO UPDATE SET quantity = EXCLUDED.quantity 
-       RETURNING *`,
-      [req.user.id, productId, quantity]
+    const item = await CartItem.findOneAndUpdate(
+      { user_id: req.user.id, product_id: productId },
+      { quantity },
+      { upsert: true, new: true }
     );
-
-    res.json(rows[0]);
+    res.json(item);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -41,12 +30,12 @@ exports.addToCart = async (req, res) => {
 
 exports.removeFromCart = async (req, res) => {
   try {
-    const { rowCount } = await query(
-      'DELETE FROM cart_items WHERE user_id = $1 AND product_id = $2',
-      [req.user.id, req.params.productId]
-    );
+    const result = await CartItem.findOneAndDelete({ 
+      user_id: req.user.id, 
+      product_id: req.params.productId 
+    });
 
-    if (rowCount === 0) return res.status(404).json({ error: 'Item not found in cart' });
+    if (!result) return res.status(404).json({ error: 'Item not found in cart' });
     res.json({ message: 'Removed from cart' });
   } catch (error) {
     res.status(500).json({ error: error.message });

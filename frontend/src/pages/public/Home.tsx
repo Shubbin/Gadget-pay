@@ -75,27 +75,28 @@ export default function Home() {
             variants={fadeIn}
             className="mx-auto max-w-6xl text-center"
           >
-            <div className="inline-flex items-center gap-2 rounded-full glass-card px-6 py-2.5 text-[10px] font-black uppercase tracking-[0.25em] text-primary mb-12 shadow-premium">
+            <div className="inline-flex items-center gap-2 rounded-full glass-card glass-grain glow-border px-6 py-2.5 text-[10px] font-black uppercase tracking-[0.25em] text-primary mb-12 shadow-premium">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
               </span>
               Shop now, pay later
             </div>
+            
+            <h1 className="mb-10 text-6xl font-black leading-[0.9] tracking-[-0.04em] text-foreground md:text-8xl lg:text-[11rem] text-balance">
+              Ownership for <br />
+              <span className="bg-gradient-to-r from-primary via-blue-600 to-indigo-600 bg-clip-text text-transparent italic pr-4">everyone.</span>
+            </h1>
+
             <motion.p
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2, duration: 0.8 }}
-              className="mt-8 text-xl text-muted-foreground/80 max-w-2xl mx-auto leading-relaxed md:text-2xl font-medium"
+              className="mb-12 text-xl text-muted-foreground/80 max-w-2xl mx-auto leading-relaxed md:text-2xl font-medium text-balance"
             >
               Get the latest gadgets and pay in easy monthly bits. 
-              <span className="block text-primary font-bold mt-2">Built for every Nigerian.</span>
+              <span className="block text-primary font-black mt-2 uppercase tracking-widest text-sm">Empowering Your Digital Lifestyle.</span>
             </motion.p>
-            
-            <h1 className="mb-10 text-6xl font-black leading-[0.9] tracking-[-0.04em] text-foreground md:text-8xl lg:text-[11rem]">
-              Get your gadgets.<br />
-              <span className="bg-gradient-to-r from-primary via-blue-600 to-indigo-600 bg-clip-text text-transparent italic text-shadow-sm">Pay in bits.</span>
-            </h1>
             
             
             <div className="flex flex-col items-center justify-center gap-6 sm:flex-row">
@@ -106,7 +107,7 @@ export default function Home() {
               </Link>
               <Link to="/calculator">
                 <Button variant="outline" className="h-16 px-12 rounded-2xl border-slate-200 bg-white/50 backdrop-blur-md text-foreground font-bold hover:bg-white transition-all text-lg shadow-premium">
-                  Analyze Plans
+                  See Plans
                 </Button>
               </Link>
             </div>

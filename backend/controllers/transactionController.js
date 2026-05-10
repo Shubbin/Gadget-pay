@@ -1,21 +1,34 @@
-const { query } = require('../config/db');
+const Transaction = require('../models/Transaction');
+const Installment = require('../models/Installment');
+const AutoDebitSubscription = require('../models/AutoDebitSubscription');
+const { calculateRiskScore } = require('../utils/riskService');
+const { checkAndAwardReferral } = require('./referralController');
 
 exports.getHistory = async (req, res) => {
   try {
-    const { rows } = await query(
-      `SELECT t.*, 
-        json_build_object(
-          'id', i.id, 'frequency', i.frequency,
-          'order', json_build_object('id', o.id, 'total_amount', o.total_amount)
-        ) as installments
-       FROM transactions t
-       JOIN installments i ON t.installment_id = i.id
-       JOIN orders o ON i.order_id = o.id
-       WHERE o.user_id = $1`,
-      [req.user.id]
-    );
+    const transactions = await Transaction.find()
+      .populate({
+        path: 'installment_id',
+        populate: { path: 'order_id' }
+      });
 
-    res.json(rows);
+    // Filter by user_id
+    const filtered = transactions.filter(t => t.installment_id?.order_id?.user_id?.toString() === req.user.id.toString());
+
+    const result = filtered.map(t => {
+      const obj = t.toObject();
+      if (obj.installment_id) {
+        obj.installments = obj.installment_id;
+        if (obj.installments.order_id) {
+            obj.installments.order = obj.installments.order_id;
+            delete obj.installments.order_id;
+        }
+        delete obj.installment_id;
+      }
+      return obj;
+    });
+
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -25,17 +38,15 @@ exports.verifyPayment = async (req, res) => {
   const { reference, installmentId, amount } = req.body;
   
   try {
-    const { rows: txRows } = await query(
-      `INSERT INTO transactions (installment_id, amount, status, payment_reference) 
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [installmentId, amount, 'success', reference]
-    );
-    const transaction = txRows[0];
+    const transaction = new Transaction({
+      installment_id: installmentId,
+      amount,
+      status: 'success',
+      payment_reference: reference
+    });
+    await transaction.save();
 
-    // Update installment balance
-    const { calculateRiskScore } = require('../utils/riskService');
-    const { checkAndAwardReferral } = require('./referralController');
-    
+    // Update risk score and check referral
     await calculateRiskScore(req.user.id);
     await checkAndAwardReferral(req.user.id);
 
@@ -47,11 +58,9 @@ exports.verifyPayment = async (req, res) => {
 
 exports.getCards = async (req, res) => {
   try {
-    const { rows } = await query(
-      'SELECT id, card_type, last4, exp_month, exp_year FROM auto_debit_subscriptions WHERE user_id = $1',
-      [req.user.id]
-    );
-    res.json(rows);
+    const cards = await AutoDebitSubscription.find({ user_id: req.user.id })
+      .select('card_type last4 exp_month exp_year');
+    res.json(cards);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -1,36 +1,21 @@
-const { query } = require('../config/db');
+const Product = require('../models/Product');
+const Wishlist = require('../models/Wishlist');
+const Order = require('../models/Order');
 
 exports.getRecommendations = async (req, res) => {
   const { productId } = req.params;
   try {
-    // 1. Try to find products users bought together (correlation)
-    const { rows: correlations } = await query(
-      `SELECT p.*, COUNT(*) as correlation_count
-       FROM orders o1
-       JOIN orders o2 ON o1.user_id = o2.user_id AND o1.product_id != o2.product_id
-       JOIN products p ON o2.product_id = p.id
-       WHERE o1.product_id = $1
-       GROUP BY p.id
-       ORDER BY correlation_count DESC
-       LIMIT 4`,
-      [productId]
-    );
+    const targetProduct = await Product.findById(productId);
+    if (!targetProduct) throw new Error('Product not found');
 
-    if (correlations.length > 0) {
-      return res.json(correlations);
-    }
-
-    // 2. Fallback: Tag/Category overlap
-    const { rows: targetRows } = await query('SELECT tags, category FROM products WHERE id = $1', [productId]);
-    if (targetRows.length === 0) throw new Error('Product not found');
-    const targetProduct = targetRows[0];
-
-    const { rows: recommendations } = await query(
-      `SELECT * FROM products 
-       WHERE id != $1 AND (tags && $2 OR category = $3) 
-       LIMIT 4`,
-      [productId, targetProduct.tags || [], targetProduct.category]
-    );
+    // Simple Recommendation: Same category, excluding current product
+    const recommendations = await Product.find({
+      _id: { $ne: productId },
+      $or: [
+        { category: targetProduct.category },
+        { tags: { $in: targetProduct.tags || [] } }
+      ]
+    }).limit(4);
 
     res.json(recommendations);
   } catch (error) {
@@ -41,13 +26,15 @@ exports.getRecommendations = async (req, res) => {
 exports.getPersonalizedSuggestions = async (req, res) => {
   try {
     const userId = req.user.id;
-    // Logic: Find products not in user's wishlist
-    const { rows: suggestions } = await query(
-      `SELECT * FROM products 
-       WHERE id NOT IN (SELECT product_id FROM wishlist WHERE user_id = $1) 
-       LIMIT 6`,
-      [userId]
-    );
+    
+    // Get products already in wishlist
+    const wishlistedItems = await Wishlist.find({ user_id: userId }).select('product_id');
+    const wishlistedIds = wishlistedItems.map(i => i.product_id);
+
+    // Find products not in wishlist
+    const suggestions = await Product.find({
+      _id: { $nin: wishlistedIds }
+    }).limit(6);
 
     res.json(suggestions);
   } catch (error) {

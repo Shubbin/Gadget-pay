@@ -27,6 +27,8 @@ export interface User {
   risk_score?: number;
   credit_limit?: number;
   interest_discount?: number;
+  card_design?: string;
+  is_card_active?: boolean;
 }
 
 export interface CartItem {

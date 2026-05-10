@@ -13,6 +13,7 @@ interface AppState {
 interface AppContextType extends AppState {
   login: (user: User, token: string) => void;
   logout: () => void;
+  setUser: (user: User) => void;
   addToCart: (product: Product) => void;
   removeFromCart: (productId: string) => void;
   addToWishlist: (product: Product) => void;
@@ -73,6 +74,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setState({ user: null, cart: [], wishlist: [], isAuthenticated: false, isLoading: false });
   }, []);
 
+  const setUser = useCallback((user: User) => {
+    setState(s => ({ ...s, user }));
+  }, []);
+
   const addToCart = useCallback(async (product: Product) => {
     setState(s => {
       const existing = s.cart.find(i => i.product.id === product.id);
@@ -113,7 +118,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const cartCount = state.cart.reduce((sum, i) => sum + i.quantity, 0);
 
   return (
-    <AppContext.Provider value={{ ...state, login, logout, addToCart, removeFromCart, addToWishlist, removeFromWishlist, cartTotal, cartCount }}>
+    <AppContext.Provider value={{ ...state, login, logout, setUser, addToCart, removeFromCart, addToWishlist, removeFromWishlist, cartTotal, cartCount }}>
       {children}
     </AppContext.Provider>
   );

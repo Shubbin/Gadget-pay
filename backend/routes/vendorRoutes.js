@@ -11,5 +11,7 @@ const isVendor = (req, res, next) => {
 router.post('/register', protect, registerVendor);
 router.get('/products', protect, isVendor, getVendorProducts);
 router.get('/stats', protect, isVendor, getVendorStats);
+router.get('/sales-history', protect, isVendor, getVendorSalesHistory);
+router.post('/withdraw', protect, isVendor, require('../controllers/vendorController').requestPayout);
 
 module.exports = router;

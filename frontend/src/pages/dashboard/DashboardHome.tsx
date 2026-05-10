@@ -11,30 +11,35 @@ import { formatCurrency, getStatusColor } from '@/utils/helpers';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'react-toastify';
 import { useState } from 'react';
+import VirtualCard, { CardSkin } from '@/components/VirtualCard';
+import StatCardSkeleton from '@/components/skeletons/StatCardSkeleton';
+import VirtualCardSkeleton from '@/components/skeletons/VirtualCardSkeleton';
+import TableSkeleton from '@/components/skeletons/TableSkeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Dashboard() {
   const { user } = useApp();
   const [copied, setCopied] = useState(false);
 
-  const { data: refStats } = useQuery({
+  const { data: refStats, isLoading: isRefLoading } = useQuery({
     queryKey: ['referralStats'],
     queryFn: () => referralService.getStats(),
     enabled: !!user
   });
 
-  const { data: orderStats } = useQuery({
+  const { data: orderStats, isLoading: isOrderLoading } = useQuery({
     queryKey: ['orderStats'],
     queryFn: () => orderService.getStats(),
     enabled: !!user
   });
 
-  const { data: recentOrders } = useQuery({
+  const { data: recentOrders, isLoading: isRecentLoading } = useQuery({
     queryKey: ['recentOrders'],
     queryFn: () => orderService.getAll(),
     enabled: !!user
   });
 
-  const { data: activeInstallments } = useQuery({
+  const { data: activeInstallments, isLoading: isInstLoading } = useQuery({
     queryKey: ['activeInstallments'],
     queryFn: () => installmentService.getAll(),
     enabled: !!user
@@ -58,28 +63,77 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1">Overview</p>
-          <h1 className="text-4xl font-black text-foreground tracking-tight">Home</h1>
-          <p className="mt-1 text-muted-foreground font-medium">Everything you need, all in one place.</p>
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+        <div className="max-w-2xl">
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-primary mb-3">Member Dashboard</p>
+          <h1 className="text-5xl font-black text-foreground tracking-tighter leading-none mb-4">
+            Welcome back, <br />
+            <span className="text-primary italic">{user?.name?.split(' ')[0]}!</span>
+          </h1>
+          <p className="text-lg text-muted-foreground font-medium text-balance">Track your gadgets, manage installments, and grow your credit score.</p>
         </div>
         
-        {/* Tier Badge */}
-        <div className={`flex items-center gap-3 px-6 py-2 rounded-xl border ${tierColors[user?.tier || 'Bronze'] || tierColors.Bronze} shadow-sm font-bold`}>
-          <ShieldCheck className="h-5 w-5" />
-          <div>
-            <p className="text-[10px] uppercase tracking-widest opacity-70 leading-none mb-1">Status</p>
-            <p className="text-sm leading-none">{user?.tier || 'New Member'}</p>
+        {/* Elite Tier Card */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="relative overflow-hidden rounded-[2.5rem] bg-white p-8 border border-slate-100 shadow-premium min-w-[320px] glow-border group"
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-primary/10 transition-colors" />
+          
+          <div className="flex items-center justify-between mb-8">
+            <div className={`p-3 rounded-2xl ${tierColors[user?.tier || 'Bronze']?.split(' ')[0]} border border-white/20 shadow-inner`}>
+              <ShieldCheck className="h-6 w-6 text-primary" />
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mb-1">Current Status</p>
+              <p className="text-xl font-black text-foreground tracking-tight">{user?.tier || 'Bronze'} Member</p>
+            </div>
           </div>
-        </div>
+
+          <div className="space-y-4">
+            <div className="flex justify-between items-end">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-1">Trust Score</p>
+                <p className="text-3xl font-black text-foreground tracking-tighter">{user?.risk_score || 0}<span className="text-sm text-muted-foreground font-bold ml-1">/ 100</span></p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none mb-1">Next Tier</p>
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Silver</p>
+              </div>
+            </div>
+            
+            <div className="relative h-3 w-full bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-50">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${user?.risk_score || 30}%` }}
+                transition={{ duration: 1.5, ease: "circOut" }}
+                className="h-full bg-gradient-to-r from-primary to-blue-400 rounded-full shadow-lg shadow-primary/20"
+              />
+            </div>
+            <p className="text-[10px] font-bold text-muted-foreground/60 text-center italic">Pay on time to increase your score & unlock 5% discount.</p>
+          </div>
+        </motion.div>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <DashboardStatCard title="Active Plans" value={activeInstallments?.length || 0} icon={CreditCard} trend="Now" trendUp />
-        <DashboardStatCard title="Credit Limit" value={formatCurrency(user?.credit_limit || 0)} icon={TrendingUp} subtitle="Total you can spend" />
-        <DashboardStatCard title="Total Owed" value={formatCurrency(orderStats?.totalBalance || 0)} icon={Clock} subtitle="Total to be paid" />
-        <DashboardStatCard title="Earnings" value={formatCurrency(refStats?.rewardsEarned || 0)} icon={Gift} subtitle="From invites" />
+      <div className="grid gap-8 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          {isOrderLoading ? (
+            <VirtualCardSkeleton />
+          ) : (
+            <VirtualCard 
+              userName={user?.name || 'Valued Member'} 
+              creditLimit={user?.credit_limit || 0} 
+              availableLimit={(user?.credit_limit || 0) - (orderStats?.totalBalance || 0)} 
+              skin={user?.card_design as CardSkin}
+              isActive={user?.is_card_active}
+            />
+          )}
+        </div>
+        <div className="space-y-6">
+          {isInstLoading ? <StatCardSkeleton /> : <DashboardStatCard title="Active Plans" value={activeInstallments?.length || 0} icon={CreditCard} trend="Now" trendUp />}
+          {isRefLoading ? <StatCardSkeleton /> : <DashboardStatCard title="Total Earnings" value={formatCurrency(refStats?.rewardsEarned || 0)} icon={Gift} subtitle="From invites" />}
+        </div>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-3">
@@ -92,7 +146,12 @@ export default function Dashboard() {
             </Link>
           </div>
           <div className="grid gap-6 md:grid-cols-2">
-            {Array.isArray(activeInstallments) && activeInstallments.slice(0, 4).map((inst: any) => {
+            {isInstLoading ? (
+              <>
+                <Skeleton className="h-32 rounded-xl" />
+                <Skeleton className="h-32 rounded-xl" />
+              </>
+            ) : Array.isArray(activeInstallments) && activeInstallments.slice(0, 4).map((inst: any) => {
               const amountPaid = parseFloat(inst.order_total) - parseFloat(inst.remaining_balance);
               const progress = Math.round((amountPaid / parseFloat(inst.order_total)) * 100);
               return (
@@ -125,7 +184,7 @@ export default function Dashboard() {
                 </div>
               );
             })}
-            {(!activeInstallments || (Array.isArray(activeInstallments) && activeInstallments.length === 0)) && (
+            {!isInstLoading && (!activeInstallments || (Array.isArray(activeInstallments) && activeInstallments.length === 0)) && (
                 <div className="col-span-2 py-10 text-center border border-dashed border-white/10 rounded-2xl">
                     <p className="text-gray-500 font-medium italic">No active payment plans found.</p>
                 </div>
@@ -170,11 +229,11 @@ export default function Dashboard() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-xl font-black text-foreground">{refStats?.referrals?.length || 0}</p>
+                  {isRefLoading ? <Skeleton className="h-7 w-10 mb-1" /> : <p className="text-xl font-black text-foreground">{refStats?.referrals?.length || 0}</p>}
                   <p className="text-[10px] font-bold text-muted-foreground uppercase">Invites</p>
                 </div>
                 <div>
-                  <p className="text-xl font-black text-foreground text-right">{refStats?.rewardsEarned || 0}</p>
+                  {isRefLoading ? <Skeleton className="h-7 w-12 ml-auto mb-1" /> : <p className="text-xl font-black text-foreground text-right">{refStats?.rewardsEarned || 0}</p>}
                   <p className="text-[10px] font-bold text-muted-foreground uppercase text-right tracking-tight">Bonus</p>
                 </div>
               </div>
@@ -233,7 +292,16 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {Array.isArray(recentOrders) && recentOrders.slice(0, 5).map((o: any) => (
+              {isRecentLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i}>
+                    <td className="py-5 pl-4"><Skeleton className="h-10 w-40" /></td>
+                    <td className="py-5"><Skeleton className="h-4 w-20" /></td>
+                    <td className="py-5"><Skeleton className="h-4 w-16" /></td>
+                    <td className="py-5 pr-4 text-right"><Skeleton className="h-6 w-16 rounded-xl ml-auto" /></td>
+                  </tr>
+                ))
+              ) : Array.isArray(recentOrders) && recentOrders.slice(0, 5).map((o: any) => (
                 <tr key={o.id} className="group transition-colors hover:bg-slate-50">
                   <td className="py-5 pl-4">
                     <div className="flex items-center gap-4">
@@ -257,7 +325,7 @@ export default function Dashboard() {
                   </td>
                 </tr>
               ))}
-              {(!recentOrders || (Array.isArray(recentOrders) && recentOrders.length === 0)) && (
+              {!isRecentLoading && (!recentOrders || (Array.isArray(recentOrders) && recentOrders.length === 0)) && (
                 <tr>
                     <td colSpan={4} className="py-10 text-center text-gray-500 font-medium italic">No recent orders.</td>
                 </tr>

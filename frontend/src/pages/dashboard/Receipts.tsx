@@ -1,10 +1,11 @@
 import { paymentService } from '@/services';
 import { formatCurrency } from '@/utils/helpers';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { Download, FileText, Loader2, Receipt } from 'lucide-react';
+import { Download, FileText, Receipt } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useQuery } from '@tanstack/react-query';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Receipts() {
   const { data: payments, isLoading } = useQuery({
@@ -14,14 +15,6 @@ export default function Receipts() {
 
   const successPayments = payments?.filter((p: any) => p.status === 'success' || p.status === 'Success') || [];
 
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div>
@@ -30,7 +23,22 @@ export default function Receipts() {
         <p className="mt-1 text-muted-foreground font-medium">Download and manage your payment documents.</p>
       </div>
 
-      {successPayments.length > 0 ? (
+      {isLoading ? (
+        <div className="grid gap-6 md:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex items-center justify-between rounded-2xl border border-border bg-white p-6">
+              <div className="flex items-center gap-4">
+                <Skeleton className="h-12 w-12 rounded-xl" />
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-48" />
+                </div>
+              </div>
+              <Skeleton className="h-10 w-10 rounded-lg" />
+            </div>
+          ))}
+        </div>
+      ) : successPayments.length > 0 ? (
         <div className="grid gap-6 md:grid-cols-2">
           {successPayments.map((p: any, i: number) => (
             <motion.div 

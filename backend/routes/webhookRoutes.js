@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { handlePaystack, handleFlutterwave } = require('../controllers/webhookController');
+const { handlePaystackWebhook } = require('../controllers/webhookController');
 
-// Paystack sends webhooks as POST
-router.post('/paystack', handlePaystack);
-router.post('/flutterwave', handleFlutterwave);
+// Paystack sends webhooks as a POST request
+// Note: This route should NOT have auth middleware as it comes from Paystack
+router.post('/paystack', handlePaystackWebhook);
 
 module.exports = router;

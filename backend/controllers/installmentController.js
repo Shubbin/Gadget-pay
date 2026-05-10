@@ -1,4 +1,9 @@
-const { query } = require('../config/db');
+const User = require('../models/User');
+const Product = require('../models/Product');
+const Order = require('../models/Order');
+const Installment = require('../models/Installment');
+const InsurancePlan = require('../models/InsurancePlan');
+const AutoDebitSubscription = require('../models/AutoDebitSubscription');
 
 const calculateInstallments = (price, duration, frequency, interestDiscount = 0, insurancePremium = 0) => {
   const baseRate = 0.05; // 5% flat
@@ -26,46 +31,50 @@ exports.createPlan = async (req, res) => {
   const userId = req.user.id;
 
   try {
-    // 1. Get product, user tier, and insurance info
-    const [prodRes, userRes, insRes] = await Promise.all([
-      query('SELECT price FROM products WHERE id = $1', [productId]),
-      query(`
-        SELECT u.tier_id, t.interest_discount 
-        FROM users u 
-        LEFT JOIN user_tiers t ON u.tier_id = t.id 
-        WHERE u.id = $1`, [userId]),
-      insuranceId ? query('SELECT monthly_premium FROM insurance_plans WHERE id = $1', [insuranceId]) : { rows: [] }
-    ]);
+    // 1. Get product, user, and insurance info
+    const product = await Product.findById(productId);
+    if (!product) throw new Error('Product not found');
 
-    if (prodRes.rows.length === 0) throw new Error('Product not found');
+    const user = await User.findById(userId).populate('tier_id');
     
-    const product = prodRes.rows[0];
-    const user = userRes.rows[0];
-    const insurance = insRes.rows[0] || { monthly_premium: 0 };
+    let insurancePremium = 0;
+    if (insuranceId) {
+      // Note: In original code insuranceId was used in SQL query. 
+      // If it's a MongoDB ID, we use findById. If it's a number/string identifier, we findOne.
+      // For now assuming it might be a name or numeric ID from previous logic.
+      const insurance = await InsurancePlan.findOne({ $or: [{ _id: mongoose.isValidObjectId(insuranceId) ? insuranceId : null }, { name: insuranceId }] });
+      insurancePremium = insurance ? insurance.monthly_premium : 0;
+    }
 
     // 2. Calculate plan
     const { installmentAmount, totalPayable, periods } = calculateInstallments(
       product.price, 
       duration, 
       frequency, 
-      user?.interest_discount || 0,
-      parseFloat(insurance.monthly_premium)
+      user?.tier_id?.interest_discount || user?.interest_discount || 0,
+      insurancePremium
     );
 
     // 3. Create Order
-    const { rows: orderRows } = await query(
-      'INSERT INTO orders (user_id, status, total_amount, insurance_id, product_id) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [userId, 'pending', totalPayable, insuranceId || null, productId]
-    );
-    const order = orderRows[0];
+    const order = new Order({
+      user_id: userId,
+      product_id: productId,
+      status: 'pending',
+      total_amount: totalPayable,
+      insurance_id: insuranceId // keeping as is for compatibility
+    });
+    await order.save();
 
     // 4. Create Installment Plan
-    const { rows: planRows } = await query(
-      `INSERT INTO installments (order_id, total_installments, frequency, remaining_balance, next_payment_date) 
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [order.id, periods, frequency, totalPayable, new Date(Date.now() + 86400000)]
-    );
-    const plan = planRows[0];
+    const plan = new Installment({
+      order_id: order._id,
+      total_installments: periods,
+      frequency,
+      total_amount: totalPayable,
+      remaining_balance: totalPayable,
+      next_payment_date: new Date(Date.now() + 86400000)
+    });
+    await plan.save();
 
     res.status(201).json({ order, plan, installmentAmount });
   } catch (error) {
@@ -76,22 +85,17 @@ exports.createPlan = async (req, res) => {
 exports.getSchedule = async (req, res) => {
   const { planId } = req.params;
   try {
-    const { rows } = await query(
-      `SELECT i.*, 
-        json_build_object(
-          'id', o.id, 
-          'status', o.status, 
-          'total_amount', o.total_amount, 
-          'created_at', o.created_at
-        ) as orders
-       FROM installments i
-       JOIN orders o ON i.order_id = o.id
-       WHERE i.id = $1`,
-      [planId]
-    );
-
-    if (rows.length === 0) return res.status(404).json({ error: 'Plan not found' });
-    res.json(rows[0]);
+    const plan = await Installment.findById(planId).populate('order_id');
+    if (!plan) return res.status(404).json({ error: 'Plan not found' });
+    
+    // Format to match expected frontend structure if needed
+    const result = plan.toObject();
+    if (result.order_id) {
+        result.orders = result.order_id;
+        delete result.order_id;
+    }
+    
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -99,18 +103,30 @@ exports.getSchedule = async (req, res) => {
 
 exports.getUserInstallments = async (req, res) => {
   try {
-    const { rows } = await query(
-      `SELECT i.*, p.name as product_name, p.image_url, o.total_amount as order_total, o.created_at as order_date,
-              CASE WHEN ads.id IS NOT NULL AND ads.status = 'active' THEN true ELSE false END as auto_debit_active
-       FROM installments i
-       JOIN orders o ON i.order_id = o.id
-       JOIN products p ON o.product_id = p.id
-       LEFT JOIN auto_debit_subscriptions ads ON i.id = ads.installment_id
-       WHERE o.user_id = $1
-       ORDER BY i.created_at DESC`,
-      [req.user.id]
-    );
-    res.json(rows);
+    const installments = await Installment.find()
+      .populate({
+        path: 'order_id',
+        match: { user_id: req.user.id },
+        populate: { path: 'product_id' }
+      })
+      .sort({ created_at: -1 });
+
+    // Filter out installments where order_id didn't match (user_id mismatch)
+    const filtered = installments.filter(i => i.order_id != null);
+
+    const result = await Promise.all(filtered.map(async (i) => {
+      const ads = await AutoDebitSubscription.findOne({ installment_id: i._id, status: 'active' });
+      return {
+        ...i.toObject(),
+        product_name: i.order_id.product_id?.name,
+        image_url: i.order_id.product_id?.image_url,
+        order_total: i.order_id.total_amount,
+        order_date: i.order_id.created_at,
+        auto_debit_active: !!ads
+      };
+    }));
+
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { query } = require('../config/db');
+const User = require('../models/User');
 
 exports.protect = async (req, res, next) => {
   let token;
@@ -9,23 +9,28 @@ exports.protect = async (req, res, next) => {
       token = req.headers.authorization.split(' ')[1];
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      const { rows } = await query(
-        `SELECT u.id, u.name, u.email, u.role, u.kyc_status, u.risk_score, u.credit_limit, 
-                t.name as tier_name, t.interest_discount
-         FROM users u
-         LEFT JOIN user_tiers t ON u.tier_id = t.id
-         WHERE u.id = $1`,
-        [decoded.id]
-      );
-      const user = rows[0];
+      const user = await User.findById(decoded.id).populate('tier_id');
 
       if (!user) {
         return res.status(401).json({ error: 'Not authorized, user not found' });
       }
 
-      req.user = user;
+      // Format user object to match expected structure in controllers
+      req.user = {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        kyc_status: user.kyc_status,
+        risk_score: user.risk_score,
+        credit_limit: user.credit_limit,
+        tier_name: user.tier_id?.name || user.tier || 'Bronze',
+        interest_discount: user.tier_id?.interest_discount || user.interest_discount || 0
+      };
+      
       next();
     } catch (error) {
+      console.error('Auth Error:', error);
       res.status(401).json({ error: 'Not authorized, token failed' });
     }
   }

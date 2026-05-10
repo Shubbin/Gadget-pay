@@ -1,9 +1,9 @@
-const { query } = require('../config/db');
+const InsurancePlan = require('../models/InsurancePlan');
 
 exports.getPlans = async (req, res) => {
   try {
-    const { rows } = await query('SELECT * FROM insurance_plans ORDER BY monthly_premium ASC');
-    res.json(rows);
+    const plans = await InsurancePlan.find().sort({ monthly_premium: 1 });
+    res.json(plans);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

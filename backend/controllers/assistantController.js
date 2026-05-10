@@ -1,53 +1,71 @@
 const Groq = require('groq-sdk');
+const User = require('../models/User');
+const Installment = require('../models/Installment');
 
 exports.chatWithAssistant = async (req, res) => {
   const { message } = req.body;
+  const userId = req.user.id;
 
   try {
+    // Fetch user context for more "Elite" advice
+    const [user, installments] = await Promise.all([
+      User.findById(userId),
+      Installment.find({ user_id: userId, status: 'active' })
+    ]);
+
+    const activeDebt = installments.reduce((sum, ins) => sum + ins.remaining_balance, 0);
+    const contextStr = `
+      User Context:
+      - Name: ${user.name}
+      - Tier: ${user.tier}
+      - Credit Limit: ₦${user.credit_limit}
+      - Active Debt: ₦${activeDebt}
+      - Risk Score: ${user.risk_score}/100
+    `;
+
     if (process.env.GROQ_API_KEY) {
       const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
       const completion = await groq.chat.completions.create({
-        model: 'llama3-8b-8192',
+        model: 'llama-3.3-70b-versatile',
         messages: [
           {
             role: 'system',
-            content: `You are GadgetFlex AI, a friendly and knowledgeable financial advisor for a tech procurement platform.
-You help users:
-- Choose the right installment plan (Daily, Weekly, or Monthly) based on their income
-- Understand how interest and repayment schedules work
-- Pick the right gadget for their budget
-- Understand credit limits and risk scores
-Keep your answers concise, practical, and encouraging. Always refer to the platform as GadgetFlex.`
+            content: `You are GadgetFlex AI, a high-end financial advisor for a premium gadget financing platform.
+            Your goal is to provide elite, data-driven advice.
+            
+            ${contextStr}
+            
+            Guidelines:
+            - If the user's Active Debt is high relative to their Credit Limit, advise caution.
+            - If they are in a high tier (Silver/Gold), treat them as a VIP.
+            - Explain the benefits of GadgetFlex (interest-free periods, insurance, credit building).
+            - Keep responses professional, concise, and futuristic.`
           },
           { role: 'user', content: message }
         ],
         max_tokens: 512,
-        temperature: 0.7,
+        temperature: 0.6,
       });
       return res.json({ response: completion.choices[0].message.content });
     }
 
-    // Smart mock fallback (no API key needed)
+    // Fallback logic remains as a safety net
     const msg = message.toLowerCase();
     let response;
 
     if (msg.includes('daily') || msg.includes('plan')) {
-      response = "Daily plans spread payments over 90 days — perfect if you receive daily income or a stipend. Monthly plans work best for salaried workers. What's your income frequency?";
-    } else if (msg.includes('credit') || msg.includes('limit') || msg.includes('eligible')) {
-      response = "Your credit limit starts at ₦500,000 and grows automatically as you make on-time payments. Complete your KYC verification first to get the best rates!";
-    } else if (msg.includes('interest') || msg.includes('rate')) {
-      response = "GadgetFlex charges a flat 5% service fee — no hidden charges. A ₦100,000 gadget on a 12-month plan means ₦105,000 total, paid as ₦8,750/month.";
-    } else if (msg.includes('kyc') || msg.includes('verify') || msg.includes('verified')) {
-      response = "KYC verification is quick! Head to your Dashboard → Profile → Submit KYC. Once an admin approves it, you unlock higher credit limits and more installment options.";
-    } else if (msg.includes('recommend') || msg.includes('best') || msg.includes('gadget')) {
-      response = "Check our Marketplace for top-ranked gadgets! Our recommendation engine suggests 'Often Bought Together' products based on real customer data. Want to start with Laptops or Phones?";
+      response = "Daily plans spread payments over 90 days — perfect if you receive daily income. Monthly plans work best for salaried workers. With your debt at ₦" + activeDebt + ", I recommend keeping a clear budget!";
+    } else if (msg.includes('credit') || msg.includes('limit')) {
+      response = "Your credit limit is ₦" + user.credit_limit + ". Complete your KYC to unlock even higher limits and premium interest rates!";
+    } else if (msg.includes('interest')) {
+      response = "GadgetFlex charges a flat 5% service fee. For a ₦100,000 gadget, that's just ₦5,000 in fees spread over your entire plan.";
     } else {
-      response = "Hi! I'm GadgetFlex AI 🤖. I can help you:\n• Choose the right installment plan\n• Calculate your monthly payments\n• Understand your credit eligibility\n\nWhat would you like to know?";
+      response = "I'm GadgetFlex AI. I see you have ₦" + activeDebt + " in active installments. To give you deep, data-driven advice, I need my high-performance engine active. For now, check your Dashboard for current limits!";
     }
-
+    
     res.json({ response });
   } catch (error) {
     console.error('AI Assistant error:', error.message);
-    res.status(500).json({ error: 'Assistant temporarily unavailable. Please try again.' });
+    res.status(500).json({ error: 'Assistant temporarily unavailable.' });
   }
 };

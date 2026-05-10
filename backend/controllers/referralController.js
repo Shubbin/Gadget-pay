@@ -1,21 +1,23 @@
-const { query } = require('../config/db');
+const Referral = require('../models/Referral');
+const User = require('../models/User');
 
 exports.getReferralStats = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { rows: referrals } = await query(
-      `SELECT r.*, u.name as invitee_name, u.email as invitee_email 
-       FROM referrals r 
-       JOIN users u ON r.invitee_id = u.id 
-       WHERE r.referrer_id = $1`,
-      [userId]
-    );
+    const referrals = await Referral.find({ referrer_id: userId })
+      .populate('invitee_id', 'name email');
+
+    const result = referrals.map(r => ({
+      ...r.toObject(),
+      invitee_name: r.invitee_id?.name,
+      invitee_email: r.invitee_id?.email
+    }));
 
     const rewardsEarned = referrals.filter(r => r.reward_claimed).length * 5000;
 
     res.json({
-      referralCode: userId, // Using UUID as code for simplicity
-      referrals,
+      referralCode: userId,
+      referrals: result,
       rewardsEarned
     });
   } catch (error) {
@@ -33,15 +35,17 @@ exports.trackReferral = async (req, res) => {
     }
 
     // Check if already referred
-    const { rows: existing } = await query('SELECT * FROM referrals WHERE invitee_id = $1', [inviteeId]);
-    if (existing.length > 0) {
+    const existing = await Referral.findOne({ invitee_id: inviteeId });
+    if (existing) {
       return res.status(400).json({ error: "You have already been referred" });
     }
 
-    await query(
-      'INSERT INTO referrals (referrer_id, invitee_id, status) VALUES ($1, $2, $3)',
-      [referrerId, inviteeId, 'pending']
-    );
+    const referral = new Referral({
+      referrer_id: referrerId,
+      invitee_id: inviteeId,
+      status: 'pending'
+    });
+    await referral.save();
 
     res.json({ message: "Referral tracked. Reward will be allocated after your first payment." });
   } catch (error) {
@@ -52,26 +56,23 @@ exports.trackReferral = async (req, res) => {
 exports.checkAndAwardReferral = async (userId) => {
   try {
     // Check if this user was referred
-    const { rows: referrals } = await query(
-      'SELECT * FROM referrals WHERE invitee_id = $1 AND status = $2 AND reward_claimed = false',
-      [userId, 'pending']
-    );
+    const referral = await Referral.findOne({ 
+      invitee_id: userId, 
+      status: 'pending', 
+      reward_claimed: false 
+    });
 
-    if (referrals.length === 0) return;
+    if (!referral) return;
 
-    const referral = referrals[0];
-
-    // Award ₦5,000 to referrer's credit limit or wallet (let's increase credit limit)
-    await query(
-      'UPDATE users SET credit_limit = credit_limit + 5000 WHERE id = $1',
-      [referral.referrer_id]
-    );
+    // Award ₦5,000 to referrer's credit limit
+    await User.findByIdAndUpdate(referral.referrer_id, {
+      $inc: { credit_limit: 5000 }
+    });
 
     // Update referral status
-    await query(
-      'UPDATE referrals SET status = $1, reward_claimed = $2 WHERE id = $3',
-      ['completed', true, referral.id]
-    );
+    referral.status = 'completed';
+    referral.reward_claimed = true;
+    await referral.save();
 
     console.log(`Referral reward awarded to ${referral.referrer_id} for user ${userId}`);
   } catch (error) {

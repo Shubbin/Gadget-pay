@@ -12,26 +12,26 @@ interface ProductCardProps {
 
 export default function ProductCard({ product }: ProductCardProps) {
   return (
-    <div className="group overflow-hidden rounded-[2rem] border border-slate-100 bg-white shadow-premium transition-all duration-500 hover:shadow-2xl hover:-translate-y-2 hover:border-primary/20">
-      <div className="relative aspect-square overflow-hidden bg-slate-50">
-        <div className="flex h-full items-center justify-center transition-transform duration-500 group-hover:scale-105 p-6">
+    <div className="group overflow-hidden rounded-[2.5rem] border border-slate-100 bg-white shadow-premium transition-all duration-700 hover:shadow-2xl hover:-translate-y-3 hover:border-primary/30 glow-border">
+      <div className="relative aspect-square overflow-hidden bg-slate-50/50">
+        <div className="flex h-full items-center justify-center transition-all duration-700 group-hover:scale-110 group-hover:rotate-2 p-10">
           {product.image_url || product.image ? (
             <img 
               src={(product.image_url || product.image)!.startsWith('http') 
                 ? (product.image_url || product.image)! 
                 : `${import.meta.env.VITE_IMAGE_BASE_URL}${product.image_url || product.image}`} 
               alt={product.name} 
-              className="h-full w-full object-contain mix-blend-multiply"
+              className="h-full w-full object-contain mix-blend-multiply drop-shadow-2xl"
             />
           ) : (
-            <span className="text-6xl drop-shadow-sm select-none">
+            <span className="text-7xl drop-shadow-2xl select-none animate-bounce-slow">
               {categoryIcons[product.category] || '📦'}
             </span>
           )}
         </div>
         {(product.installment_eligible || product.installmentEligible) && (
-          <div className="absolute left-4 top-4 rounded-full bg-primary/10 backdrop-blur-md px-4 py-1.5 text-[8px] font-black uppercase tracking-[0.2em] text-primary border border-primary/20">
-            Monthly payments available
+          <div className="absolute left-6 top-6 rounded-full glass-card glass-grain border border-primary/20 px-4 py-2 text-[8px] font-black uppercase tracking-[0.2em] text-primary shadow-lg">
+            Pay in bits
           </div>
         )}
         {product.vendor_id && (
@@ -57,7 +57,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             </div>
           )}
         </div>
-        <Link to={`/product/${product.id}`}>
+        <Link to={`/product/${product.id}`} aria-label={`View details for ${product.name}`}>
           <Button className="w-full h-11 rounded-xl bg-slate-50 text-slate-500 hover:bg-primary hover:text-white transition-all font-black uppercase tracking-[0.2em] text-[8px] border border-slate-100 shadow-none hover:shadow-lg hover:shadow-primary/20">
             View Details
           </Button>

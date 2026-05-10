@@ -1,18 +1,31 @@
-const { query } = require('../config/db');
+const KYCVerification = require('../models/KYCVerification');
+const User = require('../models/User');
+const { simulateAutoVerification } = require('../services/kycService');
 
 exports.submitKYC = async (req, res) => {
   try {
-    const { documentType, documentUrl } = req.body;
-    const { rows } = await query(
-      `INSERT INTO kyc_verifications (user_id, document_type, document_url, status) 
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [req.user.id, documentType, documentUrl, 'pending']
-    );
-
-    // Update user status
-    await query('UPDATE users SET kyc_status = $1 WHERE id = $2', ['pending', req.user.id]);
+    const { documentType, documentUrl, nin, bvn, cacNumber, cacUrl } = req.body;
     
-    res.status(201).json(rows[0]);
+    const verification = new KYCVerification({
+      user_id: req.user.id,
+      document_type: documentType,
+      document_url: documentUrl,
+      status: 'pending'
+    });
+    // Adding custom fields to document if they are provided (Mongoose Mixed type metadata if needed, or just add to schema)
+    // For now keeping it simple as per schema I created
+    await verification.save();
+
+    // Start simulated auto-verification in background
+    simulateAutoVerification(req.user.id, { nin, bvn, cac_number: cacNumber, cac_url: cacUrl });
+
+    // Mark user status as pending immediately
+    await User.findByIdAndUpdate(req.user.id, { kyc_status: 'pending' });
+    
+    res.status(201).json({ 
+      message: 'KYC submitted and auto-verification started', 
+      verification 
+    });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -20,12 +33,10 @@ exports.submitKYC = async (req, res) => {
 
 exports.getKYCStatus = async (req, res) => {
   try {
-    const { rows } = await query(
-      'SELECT * FROM kyc_verifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1',
-      [req.user.id]
-    );
+    const verification = await KYCVerification.findOne({ user_id: req.user.id })
+      .sort({ created_at: -1 });
 
-    res.json(rows[0] || { status: 'unverified' });
+    res.json(verification || { status: 'unverified' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -34,26 +45,23 @@ exports.getKYCStatus = async (req, res) => {
 exports.adminReviewKYC = async (req, res) => {
   const { kycId, status, adminNotes, creditLimit } = req.body;
   try {
-    const { rows } = await query(
-      'UPDATE kyc_verifications SET status = $1, admin_notes = $2 WHERE id = $3 RETURNING user_id',
-      [status, adminNotes, kycId]
+    const kyc = await KYCVerification.findByIdAndUpdate(
+      kycId,
+      { status, admin_notes: adminNotes },
+      { new: true }
     );
 
-    if (rows.length === 0) throw new Error('Verification record not found');
-    const kyc = rows[0];
+    if (!kyc) throw new Error('Verification record not found');
 
     // If verified, update the user table
     if (status === 'verified') {
-      await query(
-        `UPDATE users SET 
-          kyc_status = $1, 
-          credit_limit = $2, 
-          risk_score = $3 
-         WHERE id = $4`,
-        ['verified', creditLimit || 500000, 20, kyc.user_id]
-      );
+      await User.findByIdAndUpdate(kyc.user_id, {
+        kyc_status: 'verified',
+        credit_limit: creditLimit || 500000,
+        risk_score: 20
+      });
     } else {
-      await query('UPDATE users SET kyc_status = $1 WHERE id = $2', ['rejected', kyc.user_id]);
+      await User.findByIdAndUpdate(kyc.user_id, { kyc_status: 'rejected' });
     }
 
     res.json({ message: `KYC ${status}` });

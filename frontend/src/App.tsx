@@ -11,6 +11,7 @@ import DashboardLayout from "@/layouts/DashboardLayout";
 import AdminLayout from "@/layouts/AdminLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AssistantChat from "@/components/AssistantChat";
+import SearchPalette from "@/components/SearchPalette";
 
 // Public pages
 import Home from "@/pages/public/Home";
@@ -115,6 +116,7 @@ const App = () => (
           <Route path="*" element={<MainLayout><NotFound /></MainLayout>} />
         </Routes>
         <AssistantChat />
+        <SearchPalette />
       </TooltipProvider>
     </AppProvider>
   </QueryClientProvider>

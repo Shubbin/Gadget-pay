@@ -2,22 +2,15 @@ import { paymentService } from '@/services';
 import { formatCurrency, getStatusColor } from '@/utils/helpers';
 import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, ReceiptText } from 'lucide-react';
+import { ReceiptText } from 'lucide-react';
 import { motion } from 'framer-motion';
+import TableSkeleton from '@/components/skeletons/TableSkeleton';
 
 export default function Payments() {
   const { data: payments, isLoading } = useQuery({
     queryKey: ['payments'],
     queryFn: () => paymentService.getHistory()
   });
-
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -27,7 +20,11 @@ export default function Payments() {
         <p className="mt-1 text-muted-foreground font-medium">View all your past payments here.</p>
       </div>
 
-      {payments && payments.length > 0 ? (
+      {isLoading ? (
+        <div className="rounded-2xl border border-border bg-white shadow-sm p-8">
+          <TableSkeleton cols={5} rows={5} />
+        </div>
+      ) : payments && payments.length > 0 ? (
         <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left">

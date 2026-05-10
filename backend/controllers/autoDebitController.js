@@ -1,5 +1,6 @@
 const axios = require('axios');
-const { query } = require('../config/db');
+const User = require('../models/User');
+const AutoDebitSubscription = require('../models/AutoDebitSubscription');
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 
@@ -36,24 +37,24 @@ exports.initializeAutoDebit = async (req, res) => {
 exports.chargeSavedCard = async (userId, installmentId, amount) => {
   try {
     // 1. Get auth code
-    const { rows: auths } = await query(
-      'SELECT paystack_auth_code FROM auto_debit_subscriptions WHERE user_id = $1 AND installment_id = $2 AND status = $3',
-      [userId, installmentId, 'active']
-    );
+    const subscription = await AutoDebitSubscription.findOne({
+      user_id: userId,
+      installment_id: installmentId,
+      status: 'active'
+    });
 
-    if (auths.length === 0) return { success: false, error: 'No active auto-debit found' };
+    if (!subscription) return { success: false, error: 'No active auto-debit found' };
 
-    const authCode = auths[0].paystack_auth_code;
-    const { rows: userRows } = await query('SELECT email FROM users WHERE id = $1', [userId]);
-    const email = userRows[0].email;
+    const user = await User.findById(userId);
+    if (!user) return { success: false, error: 'User not found' };
 
     // 2. Charge card
     const response = await axios.post(
       'https://api.paystack.co/transaction/charge_authorization',
       {
-        email,
+        email: user.email,
         amount: amount * 100,
-        authorization_code: authCode
+        authorization_code: subscription.authorization_code
       },
       {
         headers: {

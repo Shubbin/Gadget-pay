@@ -4,6 +4,7 @@ const { getRecommendations, getPersonalizedSuggestions } = require('../controlle
 const { chatWithAssistant } = require('../controllers/assistantController');
 const { protect } = require('../middleware/authMiddleware');
 
+router.get('/ping', (req, res) => res.json({ message: 'AI Service Online' }));
 router.get('/recommendations/:productId', getRecommendations);
 router.get('/suggestions', protect, getPersonalizedSuggestions);
 router.post('/chat', protect, chatWithAssistant);

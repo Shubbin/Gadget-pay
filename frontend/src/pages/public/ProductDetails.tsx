@@ -11,6 +11,8 @@ import api from '@/services/api';
 import { toast } from 'react-toastify';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import ProductCardSkeleton from '@/components/skeletons/ProductCardSkeleton';
 
 const plans = [
   { label: 'Daily (3 months)', months: 3, freq: 'day', divisor: 90 },
@@ -64,9 +66,23 @@ export default function ProductDetails() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto flex flex-col items-center justify-center px-4 py-40 text-center">
-        <Loader2 className="h-12 w-12 text-primary animate-spin mb-6" />
-        <p className="text-muted-foreground font-bold uppercase tracking-widest text-[10px]">Loading...</p>
+      <div className="py-24 lg:py-40 min-h-screen bg-[#F9FAFB]">
+        <div className="container mx-auto px-4">
+          <Skeleton className="h-6 w-32 mb-12" />
+          <div className="grid gap-16 lg:grid-cols-2">
+            <Skeleton className="aspect-square rounded-[3rem]" />
+            <div className="space-y-8">
+              <Skeleton className="h-10 w-24 rounded-xl" />
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-12 w-1/2" />
+              <Skeleton className="h-40 w-full rounded-[2.5rem]" />
+              <div className="flex gap-6">
+                <Skeleton className="h-16 flex-1 rounded-2xl" />
+                <Skeleton className="h-16 flex-1 rounded-2xl" />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -305,10 +321,11 @@ function Recommendations({ productId }: { productId: string }) {
   });
 
   if (isLoading || !recommendations) return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-8 animate-pulse">
-      {[1, 2, 3, 4].map(i => <div key={i} className="aspect-[4/5] rounded-[2rem] bg-slate-100" />)}
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+      {[1, 2, 3, 4].map(i => <ProductCardSkeleton key={i} />)}
     </div>
   );
+ cloth
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
       {recommendations.map((product: any) => (
