@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Star, CheckCircle } from 'lucide-react';
 import { Product } from '@/types';
@@ -11,22 +12,29 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
+  const [imgError, setImgError] = useState(false);
+  const imageUrl = (product.image_url || product.image);
+
   return (
     <div className="group overflow-hidden rounded-[2.5rem] border border-slate-100 bg-white shadow-premium transition-all duration-700 hover:shadow-2xl hover:-translate-y-3 hover:border-primary/30 glow-border">
       <div className="relative aspect-square overflow-hidden bg-slate-50/50">
         <div className="flex h-full items-center justify-center transition-all duration-700 group-hover:scale-110 group-hover:rotate-2 p-10">
-          {product.image_url || product.image ? (
+          {(imageUrl && !imgError) ? (
             <img 
-              src={(product.image_url || product.image)!.startsWith('http') 
-                ? (product.image_url || product.image)! 
-                : `${import.meta.env.VITE_IMAGE_BASE_URL}${product.image_url || product.image}`} 
+              src={imageUrl.startsWith('http') 
+                ? imageUrl 
+                : `${import.meta.env.VITE_IMAGE_BASE_URL}${imageUrl}`} 
               alt={product.name} 
+              onError={() => setImgError(true)}
               className="h-full w-full object-contain mix-blend-multiply drop-shadow-2xl"
             />
           ) : (
-            <span className="text-7xl drop-shadow-2xl select-none animate-bounce-slow">
-              {categoryIcons[product.category] || '📦'}
-            </span>
+            <div className="flex flex-col items-center gap-4">
+              <span className="text-7xl drop-shadow-2xl select-none animate-bounce-slow">
+                {categoryIcons[product.category] || '📦'}
+              </span>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/30">Premium Gadget</p>
+            </div>
           )}
         </div>
         {(product.installment_eligible || product.installmentEligible) && (

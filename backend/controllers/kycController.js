@@ -1,30 +1,32 @@
-const KYCVerification = require('../models/KYCVerification');
-const User = require('../models/User');
-const { simulateAutoVerification } = require('../services/kycService');
+const supabase = require('../config/supabase');
 
 exports.submitKYC = async (req, res) => {
   try {
     const { documentType, documentUrl, nin, bvn, cacNumber, cacUrl } = req.body;
     
-    const verification = new KYCVerification({
-      user_id: req.user.id,
-      document_type: documentType,
-      document_url: documentUrl,
-      status: 'pending'
-    });
-    // Adding custom fields to document if they are provided (Mongoose Mixed type metadata if needed, or just add to schema)
-    // For now keeping it simple as per schema I created
-    await verification.save();
+    // In our Supabase schema, KYC data is stored directly in the users table or a separate table.
+    // For now, let's update the users table directly as per your schema.
+    const { data: user, error: updateError } = await supabase
+      .from('users')
+      .update({
+        kyc_status: 'pending',
+        nin,
+        bvn,
+        cac_number: cacNumber,
+        cac_url: cacUrl
+      })
+      .eq('id', req.user.id)
+      .select()
+      .single();
 
-    // Start simulated auto-verification in background
-    simulateAutoVerification(req.user.id, { nin, bvn, cac_number: cacNumber, cac_url: cacUrl });
+    if (updateError) throw updateError;
 
-    // Mark user status as pending immediately
-    await User.findByIdAndUpdate(req.user.id, { kyc_status: 'pending' });
+    // Simulate auto-verification (requires kycService migration if used)
+    // simulateAutoVerification(req.user.id, { nin, bvn, cac_number: cacNumber, cac_url: cacUrl });
     
     res.status(201).json({ 
       message: 'KYC submitted and auto-verification started', 
-      verification 
+      user 
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -33,38 +35,35 @@ exports.submitKYC = async (req, res) => {
 
 exports.getKYCStatus = async (req, res) => {
   try {
-    const verification = await KYCVerification.findOne({ user_id: req.user.id })
-      .sort({ created_at: -1 });
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('kyc_status, nin, bvn')
+      .eq('id', req.user.id)
+      .single();
 
-    res.json(verification || { status: 'unverified' });
+    if (error) throw error;
+    res.json({ status: user.kyc_status });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
 exports.adminReviewKYC = async (req, res) => {
-  const { kycId, status, adminNotes, creditLimit } = req.body;
+  const { userId, status, creditLimit } = req.body;
   try {
-    const kyc = await KYCVerification.findByIdAndUpdate(
-      kycId,
-      { status, admin_notes: adminNotes },
-      { new: true }
-    );
+    const { data: user, error } = await supabase
+      .from('users')
+      .update({
+        kyc_status: status,
+        credit_limit: status === 'verified' ? (creditLimit || 500000) : 0,
+        risk_score: status === 'verified' ? 20 : 0
+      })
+      .eq('id', userId)
+      .select()
+      .single();
 
-    if (!kyc) throw new Error('Verification record not found');
-
-    // If verified, update the user table
-    if (status === 'verified') {
-      await User.findByIdAndUpdate(kyc.user_id, {
-        kyc_status: 'verified',
-        credit_limit: creditLimit || 500000,
-        risk_score: 20
-      });
-    } else {
-      await User.findByIdAndUpdate(kyc.user_id, { kyc_status: 'rejected' });
-    }
-
-    res.json({ message: `KYC ${status}` });
+    if (error) throw error;
+    res.json({ message: `KYC ${status}`, user });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

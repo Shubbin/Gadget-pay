@@ -1,5 +1,4 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const supabase = require('../config/supabase');
 
 exports.protect = async (req, res, next) => {
   let token;
@@ -7,25 +6,34 @@ exports.protect = async (req, res, next) => {
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     try {
       token = req.headers.authorization.split(' ')[1];
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      
+      const { data: { user: authUser }, error } = await supabase.auth.getUser(token);
 
-      const user = await User.findById(decoded.id).populate('tier_id');
-
-      if (!user) {
-        return res.status(401).json({ error: 'Not authorized, user not found' });
+      if (error || !authUser) {
+        return res.status(401).json({ error: 'Not authorized, token failed or expired' });
       }
 
-      // Format user object to match expected structure in controllers
+      // Fetch additional profile data from our public.users table
+      const { data: user, error: profileError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authUser.id)
+        .single();
+
+      if (profileError || !user) {
+        return res.status(401).json({ error: 'User profile not found' });
+      }
+
       req.user = {
-        id: user._id,
+        id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
         kyc_status: user.kyc_status,
         risk_score: user.risk_score,
         credit_limit: user.credit_limit,
-        tier_name: user.tier_id?.name || user.tier || 'Bronze',
-        interest_discount: user.tier_id?.interest_discount || user.interest_discount || 0
+        tier: user.tier || 'Bronze',
+        interest_discount: user.interest_discount || 0
       };
       
       next();

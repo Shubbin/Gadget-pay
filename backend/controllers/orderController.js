@@ -1,18 +1,20 @@
-const Order = require('../models/Order');
-const Installment = require('../models/Installment');
-const Product = require('../models/Product');
+const supabase = require('../config/supabase');
 const settlementService = require('../services/SettlementService');
 
 exports.getOrders = async (req, res) => {
   try {
-    const orders = await Order.find({ user_id: req.user.id })
-      .populate('product_id')
-      .sort({ created_at: -1 });
+    const { data: orders, error } = await supabase
+      .from('orders')
+      .select('*, products:product_id(*)')
+      .eq('user_id', req.user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
 
     const result = orders.map(o => ({
-      ...o.toObject(),
-      product_name: o.product_id?.name,
-      image_url: o.product_id?.image_url
+      ...o,
+      product_name: o.products?.name,
+      image_url: o.products?.image_url
     }));
 
     res.json(result);
@@ -24,23 +26,33 @@ exports.getOrders = async (req, res) => {
 exports.createOrder = async (req, res) => {
   const { productId, totalAmount, insuranceId } = req.body;
   try {
-    const product = await Product.findById(productId);
-    if (!product) return res.status(404).json({ error: 'Product not found' });
+    const { data: product, error: pError } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', productId)
+      .single();
 
-    const order = new Order({
-      user_id: req.user.id,
-      product_id: productId,
-      vendor_id: product.vendor_id,
-      total_amount: totalAmount,
-      insurance_id: insuranceId,
-      status: 'pending'
-    });
+    if (pError || !product) return res.status(404).json({ error: 'Product not found' });
+
+    const { data: order, error: oError } = await supabase
+      .from('orders')
+      .insert([
+        {
+          user_id: req.user.id,
+          product_id: productId,
+          amount: totalAmount,
+          status: 'pending',
+          payment_status: 'unpaid'
+        }
+      ])
+      .select()
+      .single();
     
-    await order.save();
+    if (oError) throw oError;
 
-    // Process financial split
-    if (order.vendor_id) {
-      await settlementService.processOrderCommission(order._id);
+    // Process financial split if vendor exists
+    if (product.vendor_id) {
+      await settlementService.processOrderCommission(order.id);
     }
 
     res.status(201).json(order);
@@ -51,23 +63,33 @@ exports.createOrder = async (req, res) => {
 
 exports.getOrderStats = async (req, res) => {
   try {
-    const counts = await Order.aggregate([
-      { $match: { user_id: mongoose.Types.ObjectId(req.user.id) } },
-      { $group: { _id: "$status", count: { $sum: 1 } } }
-    ]);
+    // 1. Get counts by status
+    const { data: orders, error: oError } = await supabase
+      .from('orders')
+      .select('status')
+      .eq('user_id', req.user.id);
 
-    const installments = await Installment.find()
-      .populate({
-        path: 'order_id',
-        match: { user_id: req.user.id }
-      });
+    if (oError) throw oError;
 
-    const totalBalance = installments
-      .filter(i => i.order_id != null)
-      .reduce((sum, i) => sum + (i.remaining_balance || 0), 0);
+    const countsMap = orders.reduce((acc, o) => {
+      acc[o.status] = (acc[o.status] || 0) + 1;
+      return acc;
+    }, {});
+
+    const counts = Object.entries(countsMap).map(([status, count]) => ({ status, count }));
+
+    // 2. Get total balance from installments
+    const { data: installments, error: iError } = await supabase
+      .from('installments')
+      .select('remaining_balance')
+      .eq('user_id', req.user.id);
+
+    if (iError) throw iError;
+
+    const totalBalance = installments.reduce((sum, i) => sum + (Number(i.remaining_balance) || 0), 0);
 
     res.json({
-      counts: counts.map(c => ({ status: c._id, count: c.count })),
+      counts,
       totalBalance
     });
   } catch (error) {

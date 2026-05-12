@@ -63,55 +63,107 @@ export default function Home() {
   return (
     <div className="bg-white min-h-screen selection:bg-primary/10">
       {/* Hero */}
-      <section className="relative overflow-hidden pt-20 pb-20 lg:pt-32 lg:pb-40 mesh-gradient-elite">
+      <section className="relative overflow-hidden pt-24 pb-20 lg:pt-32 lg:pb-40 mesh-gradient-premium">
         {/* Elite Background elements */}
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 blur-[120px] rounded-full animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-400/5 blur-[120px] rounded-full animate-pulse delay-700" />
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary/5 blur-[150px] rounded-full animate-pulse" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-500/5 blur-[150px] rounded-full animate-pulse delay-700" />
         
         <div className="container relative z-10 mx-auto px-4">
-          <motion.div 
-            initial="hidden" 
-            animate="visible" 
-            variants={fadeIn}
-            className="mx-auto max-w-6xl text-center"
-          >
-            <div className="inline-flex items-center gap-2 rounded-full glass-card glass-grain glow-border px-6 py-2.5 text-[10px] font-black uppercase tracking-[0.25em] text-primary mb-12 shadow-premium">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-              </span>
-              Shop now, pay later
-            </div>
-            
-            <h1 className="mb-10 text-6xl font-black leading-[0.9] tracking-[-0.04em] text-foreground md:text-8xl lg:text-[11rem] text-balance">
-              Ownership for <br />
-              <span className="bg-gradient-to-r from-primary via-blue-600 to-indigo-600 bg-clip-text text-transparent italic pr-4">everyone.</span>
-            </h1>
-
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.8 }}
-              className="mb-12 text-xl text-muted-foreground/80 max-w-2xl mx-auto leading-relaxed md:text-2xl font-medium text-balance"
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <motion.div 
+              initial="hidden" 
+              animate="visible" 
+              variants={fadeIn}
+              className="text-left"
             >
-              Get the latest gadgets and pay in easy monthly bits. 
-              <span className="block text-primary font-black mt-2 uppercase tracking-widest text-sm">Empowering Your Digital Lifestyle.</span>
-            </motion.p>
-            
-            
-            <div className="flex flex-col items-center justify-center gap-6 sm:flex-row">
-              <Link to="/marketplace">
-                <Button className="h-16 px-12 rounded-2xl bg-primary text-white font-black hover:bg-primary/90 transition-all shadow-2xl shadow-primary/40 text-lg uppercase tracking-widest group">
-                  <ShoppingBag className="mr-3 h-5 w-5 transition-transform group-hover:scale-110" /> Start Shopping
-                </Button>
-              </Link>
-              <Link to="/calculator">
-                <Button variant="outline" className="h-16 px-12 rounded-2xl border-slate-200 bg-white/50 backdrop-blur-md text-foreground font-bold hover:bg-white transition-all text-lg shadow-premium">
-                  See Plans
-                </Button>
-              </Link>
-            </div>
-          </motion.div>
+              <h1 className="mb-8 text-6xl font-black leading-[1.05] tracking-[-0.04em] text-foreground md:text-7xl lg:text-8xl text-balance">
+                Ownership for <br />
+                <span className="bg-gradient-to-r from-primary via-blue-600 to-indigo-600 bg-clip-text text-transparent italic pr-4">everyone.</span>
+              </h1>
+
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.8 }}
+                className="mb-12 text-xl text-muted-foreground/80 max-w-xl leading-relaxed font-medium text-balance"
+              >
+                Get the latest premium gadgets and pay in easy, stress-free installments. 
+                <span className="block text-primary font-black mt-4 uppercase tracking-[0.2em] text-xs">Empowering Your Digital Lifestyle.</span>
+              </motion.p>
+              
+              <div className="flex flex-col sm:flex-row gap-6">
+                <Link to="/marketplace">
+                  <Button className="h-16 px-10 rounded-2xl bg-primary text-white font-black hover:bg-primary/90 transition-all shadow-xl shadow-primary/30 text-base uppercase tracking-widest group">
+                    <ShoppingBag className="mr-3 h-5 w-5 transition-transform group-hover:scale-110" /> Start Shopping
+                  </Button>
+                </Link>
+                <Link to="/calculator">
+                  <Button variant="outline" className="h-16 px-10 rounded-2xl border-slate-200 bg-white/50 backdrop-blur-md text-foreground font-bold hover:bg-white transition-all text-base shadow-premium uppercase tracking-widest">
+                    See Plans
+                  </Button>
+                </Link>
+              </div>
+
+              <div className="mt-12 flex items-center gap-8 border-t border-slate-100 pt-10">
+                <div>
+                  <p className="text-3xl font-black text-foreground tracking-tight">15k+</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Happy Users</p>
+                </div>
+                <div className="w-px h-10 bg-slate-100" />
+                <div>
+                  <p className="text-3xl font-black text-foreground tracking-tight">98%</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Approval Rate</p>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, rotate: 2 }}
+              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+              transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+              className="relative hidden lg:block"
+            >
+              <div className="relative z-10 rounded-[3rem] overflow-hidden shadow-[0_50px_100px_-20px_rgba(0,0,0,0.15)] border-8 border-white/50 backdrop-blur-sm">
+                <img 
+                  src="/hero-gadgets.png" 
+                  alt="Premium Gadgets" 
+                  className="w-full h-auto object-cover transform hover:scale-105 transition-transform duration-1000"
+                />
+              </div>
+              {/* Floating badges for extra premium feel */}
+              <motion.div 
+                animate={{ y: [0, -10, 0] }}
+                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute -top-6 -right-6 z-20 bg-white p-6 rounded-3xl shadow-premium border border-slate-50"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-full bg-emerald-50 flex items-center justify-center">
+                    <CheckCircle className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Certified</p>
+                    <p className="text-xs font-bold text-foreground">Gadget Assurance</p>
+                  </div>
+                </div>
+              </motion.div>
+
+              <motion.div 
+                animate={{ y: [0, 10, 0] }}
+                transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+                className="absolute -bottom-10 -left-10 z-20 bg-white p-6 rounded-3xl shadow-premium border border-slate-50"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
+                    <Shield className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Secure</p>
+                    <p className="text-xs font-bold text-foreground">Flexible Payments</p>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          </div>
         </div>
       </section>
 

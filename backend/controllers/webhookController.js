@@ -1,6 +1,4 @@
-const Transaction = require('../models/Transaction');
-const Installment = require('../models/Installment');
-const AutoDebitSubscription = require('../models/AutoDebitSubscription');
+const supabase = require('../config/supabase');
 
 exports.handlePaystackWebhook = async (req, res) => {
   const event = req.body;
@@ -22,24 +20,32 @@ exports.handlePaystackWebhook = async (req, res) => {
     try {
       console.log(`[Paystack Webhook] Processing successful payment for Installment ${installmentId}`);
 
-      // 1. Record the transaction with 48h escrow
-      const settlementReadyAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
-      
-      const transaction = new Transaction({
-        installment_id: installmentId,
-        amount: amount / 100,
-        status: 'success',
-        payment_reference: reference,
-        is_settled_to_vendor: false,
-        settlement_ready_at: settlementReadyAt
-      });
-      await transaction.save();
+      // 1. Record the transaction
+      const { data: transaction, error: tError } = await supabase
+        .from('transactions')
+        .insert([
+          {
+            installment_id: installmentId,
+            user_id: userId,
+            amount: amount / 100,
+            status: 'success',
+            reference: reference,
+            type: 'payment',
+            payment_gateway: 'paystack'
+          }
+        ]);
+
+      if (tError) throw tError;
 
       // 2. Update installment balance and next date
-      const inst = await Installment.findById(installmentId);
+      const { data: inst, error: fetchError } = await supabase
+        .from('installments')
+        .select('*')
+        .eq('id', installmentId)
+        .single();
       
       if (inst) {
-        const newBalance = Math.max(0, inst.remaining_balance - (amount / 100));
+        const newBalance = Math.max(0, Number(inst.remaining_balance) - (amount / 100));
         
         let nextDate = null;
         if (newBalance > 0) {
@@ -53,25 +59,16 @@ exports.handlePaystackWebhook = async (req, res) => {
           }
         }
 
-        inst.remaining_balance = newBalance;
-        inst.next_payment_date = nextDate;
-        inst.status = newBalance === 0 ? 'completed' : 'active';
-        await inst.save();
+        const { error: updateError } = await supabase
+          .from('installments')
+          .update({
+            remaining_balance: newBalance,
+            next_payment_date: nextDate ? nextDate.toISOString() : null,
+            status: newBalance === 0 ? 'completed' : 'active'
+          })
+          .eq('id', installmentId);
 
-        // 3. Store authorization for auto-debit if provided
-        if (authorization && authorization.reusable) {
-          await AutoDebitSubscription.findOneAndUpdate(
-            { user_id: userId, last4: authorization.last4 },
-            { 
-              authorization_code: authorization.authorization_code,
-              card_type: authorization.card_type,
-              exp_month: authorization.exp_month,
-              exp_year: authorization.exp_year,
-              status: 'active'
-            },
-            { upsert: true }
-          );
-        }
+        if (updateError) throw updateError;
       }
 
       console.log(`[Paystack Webhook] Successfully settled installment ${installmentId}`);

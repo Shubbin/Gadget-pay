@@ -1,9 +1,4 @@
-const User = require('../models/User');
-const Product = require('../models/Product');
-const Order = require('../models/Order');
-const Installment = require('../models/Installment');
-const InsurancePlan = require('../models/InsurancePlan');
-const AutoDebitSubscription = require('../models/AutoDebitSubscription');
+const supabase = require('../config/supabase');
 
 const calculateInstallments = (price, duration, frequency, interestDiscount = 0, insurancePremium = 0) => {
   const baseRate = 0.05; // 5% flat
@@ -31,50 +26,61 @@ exports.createPlan = async (req, res) => {
   const userId = req.user.id;
 
   try {
-    // 1. Get product, user, and insurance info
-    const product = await Product.findById(productId);
-    if (!product) throw new Error('Product not found');
+    // 1. Get product info
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', productId)
+      .single();
 
-    const user = await User.findById(userId).populate('tier_id');
-    
-    let insurancePremium = 0;
-    if (insuranceId) {
-      // Note: In original code insuranceId was used in SQL query. 
-      // If it's a MongoDB ID, we use findById. If it's a number/string identifier, we findOne.
-      // For now assuming it might be a name or numeric ID from previous logic.
-      const insurance = await InsurancePlan.findOne({ $or: [{ _id: mongoose.isValidObjectId(insuranceId) ? insuranceId : null }, { name: insuranceId }] });
-      insurancePremium = insurance ? insurance.monthly_premium : 0;
-    }
+    if (productError || !product) throw new Error('Product not found');
 
     // 2. Calculate plan
     const { installmentAmount, totalPayable, periods } = calculateInstallments(
       product.price, 
       duration, 
       frequency, 
-      user?.tier_id?.interest_discount || user?.interest_discount || 0,
-      insurancePremium
+      req.user.interest_discount || 0,
+      0 // Insurance premium simplified for now
     );
 
     // 3. Create Order
-    const order = new Order({
-      user_id: userId,
-      product_id: productId,
-      status: 'pending',
-      total_amount: totalPayable,
-      insurance_id: insuranceId // keeping as is for compatibility
-    });
-    await order.save();
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .insert([
+        {
+          user_id: userId,
+          product_id: productId,
+          amount: totalPayable,
+          plan: `${duration} months ${frequency}`,
+          status: 'pending',
+          payment_status: 'unpaid'
+        }
+      ])
+      .select()
+      .single();
+
+    if (orderError) throw orderError;
 
     // 4. Create Installment Plan
-    const plan = new Installment({
-      order_id: order._id,
-      total_installments: periods,
-      frequency,
-      total_amount: totalPayable,
-      remaining_balance: totalPayable,
-      next_payment_date: new Date(Date.now() + 86400000)
-    });
-    await plan.save();
+    const { data: plan, error: planError } = await supabase
+      .from('installments')
+      .insert([
+        {
+          order_id: order.id,
+          user_id: userId,
+          total_installments: periods,
+          frequency,
+          total_amount: totalPayable,
+          remaining_balance: totalPayable,
+          next_payment_date: new Date(Date.now() + 86400000).toISOString(),
+          status: 'active'
+        }
+      ])
+      .select()
+      .single();
+
+    if (planError) throw planError;
 
     res.status(201).json({ order, plan, installmentAmount });
   } catch (error) {
@@ -85,17 +91,14 @@ exports.createPlan = async (req, res) => {
 exports.getSchedule = async (req, res) => {
   const { planId } = req.params;
   try {
-    const plan = await Installment.findById(planId).populate('order_id');
-    if (!plan) return res.status(404).json({ error: 'Plan not found' });
-    
-    // Format to match expected frontend structure if needed
-    const result = plan.toObject();
-    if (result.order_id) {
-        result.orders = result.order_id;
-        delete result.order_id;
-    }
-    
-    res.json(result);
+    const { data: plan, error } = await supabase
+      .from('installments')
+      .select('*, orders(*, products(*))')
+      .eq('id', planId)
+      .single();
+
+    if (error || !plan) return res.status(404).json({ error: 'Plan not found' });
+    res.json(plan);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -103,27 +106,32 @@ exports.getSchedule = async (req, res) => {
 
 exports.getUserInstallments = async (req, res) => {
   try {
-    const installments = await Installment.find()
-      .populate({
-        path: 'order_id',
-        match: { user_id: req.user.id },
-        populate: { path: 'product_id' }
-      })
-      .sort({ created_at: -1 });
+    const { data: installments, error } = await supabase
+      .from('installments')
+      .select(`
+        *,
+        orders:order_id (
+          id,
+          total_amount:amount,
+          created_at,
+          products:product_id (
+            name,
+            image_url
+          )
+        )
+      `)
+      .eq('user_id', req.user.id)
+      .order('created_at', { ascending: false });
 
-    // Filter out installments where order_id didn't match (user_id mismatch)
-    const filtered = installments.filter(i => i.order_id != null);
+    if (error) throw error;
 
-    const result = await Promise.all(filtered.map(async (i) => {
-      const ads = await AutoDebitSubscription.findOne({ installment_id: i._id, status: 'active' });
-      return {
-        ...i.toObject(),
-        product_name: i.order_id.product_id?.name,
-        image_url: i.order_id.product_id?.image_url,
-        order_total: i.order_id.total_amount,
-        order_date: i.order_id.created_at,
-        auto_debit_active: !!ads
-      };
+    const result = installments.map(i => ({
+      ...i,
+      product_name: i.orders?.products?.name,
+      image_url: i.orders?.products?.image_url,
+      order_total: i.orders?.total_amount,
+      order_date: i.orders?.created_at,
+      auto_debit_active: false // To be implemented with transactions
     }));
 
     res.json(result);

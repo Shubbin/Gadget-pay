@@ -29,8 +29,8 @@ export default function Register() {
       console.log('--- [DEV MODE] OTP INSPECTION ---');
       console.log('Registration Response:', res);
       console.log('---------------------------------');
-      toast.success('Verification code sent to your email!');
-      navigate(`/verify-otp?email=${encodeURIComponent(email)}`);
+      toast.success('Registration successful! Please check your email to verify your account.');
+      navigate('/login');
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Registration failed.');
     }

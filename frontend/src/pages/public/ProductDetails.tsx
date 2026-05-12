@@ -26,6 +26,7 @@ export default function ProductDetails() {
   const { addToCart, user, isAuthenticated } = useApp();
   const [selectedInsurance, setSelectedInsurance] = useState<any>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [mainImgError, setMainImgError] = useState(false);
 
   const { data: product, isLoading, isError } = useQuery({
     queryKey: ['product', id],
@@ -108,22 +109,26 @@ export default function ProductDetails() {
         <Link to="/marketplace" className="mb-12 inline-flex items-center gap-3 text-sm font-bold text-muted-foreground/60 hover:text-primary transition-all group uppercase tracking-widest">
           <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" /> Back to Shop
         </Link>
-
+ 
         <div className="grid gap-16 lg:grid-cols-2">
           {/* Image */}
           <div className="flex aspect-square items-center justify-center rounded-[3rem] border border-slate-100 bg-white overflow-hidden shadow-premium transition-transform hover:scale-[1.01] duration-500">
-            {product.image_url ? (
+            {product.image_url && !mainImgError ? (
               <img 
                 src={product.image_url.startsWith('http') 
                   ? product.image_url 
                   : `${import.meta.env.VITE_IMAGE_BASE_URL}${product.image_url}`} 
                 alt={product.name} 
+                onError={() => setMainImgError(true)}
                 className="h-full w-full object-cover"
               />
             ) : (
-              <span className="text-[180px] drop-shadow-[0_20px_50px_rgba(29,78,216,0.1)] transition-transform hover:rotate-3 duration-700 select-none">
-                {categoryIcons[product.category] || '📦'}
-              </span>
+              <div className="flex flex-col items-center gap-6">
+                <span className="text-[180px] drop-shadow-[0_20px_50px_rgba(29,78,216,0.1)] transition-transform hover:rotate-3 duration-700 select-none">
+                  {categoryIcons[product.category] || '📦'}
+                </span>
+                <p className="text-xs font-black uppercase tracking-[0.4em] text-muted-foreground/20">Elite Device</p>
+              </div>
             )}
           </div>
 
@@ -312,6 +317,8 @@ export default function ProductDetails() {
 }
 
 function Recommendations({ productId }: { productId: string }) {
+  const [imgErrors, setImgErrors] = useState<Record<string, boolean>>({});
+  
   const { data: recommendations, isLoading } = useQuery({
     queryKey: ['recommendations', productId],
     queryFn: async () => {
@@ -325,25 +332,29 @@ function Recommendations({ productId }: { productId: string }) {
       {[1, 2, 3, 4].map(i => <ProductCardSkeleton key={i} />)}
     </div>
   );
- cloth
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
       {recommendations.map((product: any) => (
         <Link key={product.id} to={`/product/${product.id}`} className="group block h-full">
            <div className="h-full rounded-[2rem] border border-slate-100 bg-white p-8 transition-all hover:bg-white hover:border-primary/20 shadow-premium hover:shadow-2xl">
               <div className="aspect-square flex items-center justify-center rounded-2xl bg-slate-50 mb-6 overflow-hidden">
-                {product.image_url || product.imageUrl ? (
+                {(product.image_url || product.imageUrl) && !imgErrors[product.id] ? (
                   <img 
                     src={(product.image_url || product.imageUrl).startsWith('http') 
                       ? (product.image_url || product.imageUrl) 
                       : `${import.meta.env.VITE_IMAGE_BASE_URL}${product.image_url || product.imageUrl}`} 
                     alt={product.name} 
+                    onError={() => setImgErrors(prev => ({ ...prev, [product.id]: true }))}
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <span className="text-6xl drop-shadow-sm transition-transform group-hover:scale-110 duration-500">
-                     {categoryIcons[product.category] || '📦'}
-                  </span>
+                  <div className="flex flex-col items-center gap-2">
+                    <span className="text-6xl drop-shadow-sm transition-transform group-hover:scale-110 duration-500">
+                      {categoryIcons[product.category] || '📦'}
+                    </span>
+                    <p className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/30">Premium Gadget</p>
+                  </div>
                 )}
               </div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-2 opacity-60">{product.brand}</p>

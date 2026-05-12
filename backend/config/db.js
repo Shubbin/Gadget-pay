@@ -78,7 +78,7 @@ const seedData = async () => {
 };
 
 // Initial connection
-connectDB();
+// connectDB();
 
 module.exports = {
   connectDB,
