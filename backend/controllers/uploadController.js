@@ -1,5 +1,5 @@
 const sharp = require('sharp');
-const { query } = require('../config/db');
+const supabase = require('../config/supabase');
 
 exports.uploadImage = async (req, res) => {
   try {
@@ -15,18 +15,19 @@ exports.uploadImage = async (req, res) => {
       .jpeg({ quality: 80 })
       .toBuffer();
 
-    // Insert into DB
-    const { rows } = await query(
-      'INSERT INTO product_images (data, mime_type) VALUES ($1, $2) RETURNING id',
-      [compressedBuffer, 'image/jpeg']
-    );
+    // Insert into Supabase
+    const { data, error } = await supabase
+      .from('product_images')
+      .insert([{ data: compressedBuffer.toString('base64'), mime_type: 'image/jpeg' }])
+      .select('id')
+      .single();
 
-    const imageId = rows[0].id;
-    const publicUrl = `/api/upload/image/${imageId}`;
+    if (error) throw error;
 
+    const publicUrl = `/api/upload/image/${data.id}`;
     res.json({ url: publicUrl });
   } catch (error) {
-    console.error('Upload Error:', error);
+    console.error('Upload Error:', error.message);
     res.status(500).json({ error: error.message });
   }
 };
@@ -34,15 +35,19 @@ exports.uploadImage = async (req, res) => {
 exports.getImage = async (req, res) => {
   try {
     const { id } = req.params;
-    const { rows } = await query('SELECT data, mime_type FROM product_images WHERE id = $1', [id]);
+    const { data, error } = await supabase
+      .from('product_images')
+      .select('data, mime_type')
+      .eq('id', id)
+      .single();
 
-    if (rows.length === 0) {
+    if (error || !data) {
       return res.status(404).json({ error: 'Image not found' });
     }
 
-    const { data, mime_type } = rows[0];
-    res.set('Content-Type', mime_type);
-    res.send(data);
+    const imageBuffer = Buffer.from(data.data, 'base64');
+    res.set('Content-Type', data.mime_type);
+    res.send(imageBuffer);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

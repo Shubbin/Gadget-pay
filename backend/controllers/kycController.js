@@ -4,8 +4,7 @@ exports.submitKYC = async (req, res) => {
   try {
     const { documentType, documentUrl, nin, bvn, cacNumber, cacUrl } = req.body;
     
-    // In our Supabase schema, KYC data is stored directly in the users table or a separate table.
-    // For now, let's update the users table directly as per your schema.
+    // 1. Update user record with core KYC fields
     const { data: user, error: updateError } = await supabase
       .from('users')
       .update({
@@ -21,11 +20,18 @@ exports.submitKYC = async (req, res) => {
 
     if (updateError) throw updateError;
 
-    // Simulate auto-verification (requires kycService migration if used)
-    // simulateAutoVerification(req.user.id, { nin, bvn, cac_number: cacNumber, cac_url: cacUrl });
+    // 2. Log the submission in kyc_verifications for audit trail
+    await supabase
+      .from('kyc_verifications')
+      .insert([{
+        user_id: req.user.id,
+        document_type: documentType,
+        document_url: documentUrl,
+        status: 'pending'
+      }]);
     
     res.status(201).json({ 
-      message: 'KYC submitted and auto-verification started', 
+      message: 'KYC submitted successfully and is pending review', 
       user 
     });
   } catch (error) {
@@ -49,7 +55,7 @@ exports.getKYCStatus = async (req, res) => {
 };
 
 exports.adminReviewKYC = async (req, res) => {
-  const { userId, status, creditLimit } = req.body;
+  const { userId, status, creditLimit, adminNotes } = req.body;
   try {
     const { data: user, error } = await supabase
       .from('users')
@@ -63,6 +69,15 @@ exports.adminReviewKYC = async (req, res) => {
       .single();
 
     if (error) throw error;
+
+    // Update the latest kyc_verifications record
+    await supabase
+      .from('kyc_verifications')
+      .update({ status, admin_notes: adminNotes })
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
     res.json({ message: `KYC ${status}`, user });
   } catch (error) {
     res.status(400).json({ error: error.message });

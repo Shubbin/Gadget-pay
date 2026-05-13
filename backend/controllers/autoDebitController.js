@@ -1,6 +1,5 @@
 const axios = require('axios');
-const User = require('../models/User');
-const AutoDebitSubscription = require('../models/AutoDebitSubscription');
+const supabase = require('../config/supabase');
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 
@@ -36,19 +35,27 @@ exports.initializeAutoDebit = async (req, res) => {
 
 exports.chargeSavedCard = async (userId, installmentId, amount) => {
   try {
-    // 1. Get auth code
-    const subscription = await AutoDebitSubscription.findOne({
-      user_id: userId,
-      installment_id: installmentId,
-      status: 'active'
-    });
+    // 1. Get auth code from Supabase
+    const { data: subscription, error: subError } = await supabase
+      .from('auto_debit_subscriptions')
+      .select('authorization_code')
+      .eq('user_id', userId)
+      .eq('installment_id', installmentId)
+      .eq('status', 'active')
+      .single();
 
-    if (!subscription) return { success: false, error: 'No active auto-debit found' };
+    if (subError || !subscription) return { success: false, error: 'No active auto-debit found' };
 
-    const user = await User.findById(userId);
-    if (!user) return { success: false, error: 'User not found' };
+    // 2. Get user email
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('email')
+      .eq('id', userId)
+      .single();
 
-    // 2. Charge card
+    if (userError || !user) return { success: false, error: 'User not found' };
+
+    // 3. Charge card
     const response = await axios.post(
       'https://api.paystack.co/transaction/charge_authorization',
       {
@@ -70,7 +77,7 @@ exports.chargeSavedCard = async (userId, installmentId, amount) => {
       return { success: false, error: response.data.data.gateway_response };
     }
   } catch (error) {
-    console.error('Auto-Debit Charge Error:', error);
+    console.error('Auto-Debit Charge Error:', error.message);
     return { success: false, error: error.message };
   }
 };

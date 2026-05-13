@@ -63,6 +63,10 @@ app.get('/', (req, res) => {
   res.json({ message: 'Welcome to GadgetFlex API' });
 });
 
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', uptime: process.uptime() });
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -70,6 +74,18 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3001;
+const https = require('https');
+
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+
+  // Keep-alive logic for Render (Free Tier)
+  const url = process.env.BACKEND_URL || `https://gadgetflex-backend.onrender.com`;
+  setInterval(() => {
+    https.get(`${url}/health`, (res) => {
+      console.log(`[Keep-Alive] Pinged ${url}/health: Status ${res.statusCode}`);
+    }).on('error', (err) => {
+      console.error('[Keep-Alive Error]:', err.message);
+    });
+  }, 600000); // 10 minutes
 });

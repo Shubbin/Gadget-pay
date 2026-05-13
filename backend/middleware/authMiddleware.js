@@ -55,3 +55,37 @@ exports.admin = (req, res, next) => {
     res.status(403).json({ error: 'Not authorized as an admin' });
   }
 };
+
+exports.merchantApiKey = async (req, res, next) => {
+  const apiKey = req.headers['x-api-key'];
+
+  if (!apiKey) {
+    return res.status(401).json({ error: 'API Key missing' });
+  }
+
+  try {
+    const { data: keyData, error } = await supabase
+      .from('merchant_api_keys')
+      .select('*, users:merchant_id(*)')
+      .eq('api_key', apiKey)
+      .eq('is_active', true)
+      .single();
+
+    if (error || !keyData) {
+      return res.status(401).json({ error: 'Invalid or inactive API Key' });
+    }
+
+    // Attach merchant to request
+    req.merchant = keyData.users;
+
+    // Update last used at
+    await supabase
+      .from('merchant_api_keys')
+      .update({ last_used_at: new Date().toISOString() })
+      .eq('id', keyData.id);
+
+    next();
+  } catch (error) {
+    res.status(401).json({ error: 'Authentication failed' });
+  }
+};

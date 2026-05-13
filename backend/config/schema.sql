@@ -52,10 +52,17 @@ CREATE TABLE IF NOT EXISTS public.orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES public.users(id) NOT NULL,
   product_id UUID REFERENCES public.products(id) NOT NULL,
+  vendor_id UUID REFERENCES public.users(id),
   amount NUMERIC NOT NULL,
-  plan TEXT NOT NULL,
+  plan TEXT,
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'shipped', 'delivered', 'cancelled')),
   payment_status TEXT DEFAULT 'unpaid' CHECK (payment_status IN ('unpaid', 'partial', 'paid')),
+  vendor_payout_amount NUMERIC DEFAULT 0,
+  platform_commission NUMERIC DEFAULT 0,
+  payout_status TEXT DEFAULT 'unprocessed' CHECK (payout_status IN ('unprocessed', 'pending', 'settled', 'paid')),
+  is_b2b BOOLEAN DEFAULT false,
+  delivery_otp TEXT,
+  delivered_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -84,8 +91,10 @@ CREATE TABLE IF NOT EXISTS public.transactions (
   amount NUMERIC NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('payment', 'refund', 'payout', 'commission', 'escrow')),
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'success', 'failed')),
-  payment_gateway TEXT, -- paystack, flutterwave
+  payment_gateway TEXT,
   reference TEXT UNIQUE,
+  is_settled_to_vendor BOOLEAN DEFAULT false,
+  settlement_ready_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -109,6 +118,113 @@ CREATE TABLE IF NOT EXISTS public.wishlist (
   UNIQUE(user_id, product_id)
 );
 
+-- 8. Cart Items Table
+CREATE TABLE IF NOT EXISTS public.cart_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+  product_id UUID REFERENCES public.products(id) ON DELETE CASCADE NOT NULL,
+  quantity INTEGER DEFAULT 1,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  UNIQUE(user_id, product_id)
+);
+
+-- 9. Insurance Plans Table
+CREATE TABLE IF NOT EXISTS public.insurance_plans (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT UNIQUE NOT NULL,
+  description TEXT,
+  monthly_premium NUMERIC,
+  coverage_limit NUMERIC,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 10. KYC Verifications Table
+CREATE TABLE IF NOT EXISTS public.kyc_verifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+  document_type TEXT,
+  document_url TEXT,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'verified', 'rejected')),
+  admin_notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 11. Referrals Table
+CREATE TABLE IF NOT EXISTS public.referrals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  referrer_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+  invitee_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'completed')),
+  reward_claimed BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  UNIQUE(invitee_id)
+);
+
+-- 12. User Tiers Table
+CREATE TABLE IF NOT EXISTS public.user_tiers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT UNIQUE NOT NULL,
+  min_score INTEGER,
+  max_score INTEGER,
+  interest_discount NUMERIC,
+  credit_multiplier NUMERIC,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 13. Auto-Debit Subscriptions Table
+CREATE TABLE IF NOT EXISTS public.auto_debit_subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+  installment_id UUID REFERENCES public.installments(id) ON DELETE CASCADE,
+  authorization_code TEXT,
+  card_type TEXT,
+  last4 TEXT,
+  exp_month TEXT,
+  exp_year TEXT,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  UNIQUE(user_id, last4)
+);
+
+-- 14. Merchant API Keys (For B2B)
+CREATE TABLE IF NOT EXISTS public.merchant_api_keys (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  merchant_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+  api_key TEXT UNIQUE NOT NULL,
+  name TEXT DEFAULT 'Default Key',
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  last_used_at TIMESTAMP WITH TIME ZONE
+);
+
+-- 15. AI Coaching Logs
+CREATE TABLE IF NOT EXISTS public.ai_coaching_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+  advice_type TEXT NOT NULL,
+  advice_content TEXT NOT NULL,
+  risk_score_at_time INTEGER,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 16. Product Images Table (Optional/Legacy)
+CREATE TABLE IF NOT EXISTS public.product_images (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  data BYTEA NOT NULL,
+  mime_type TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 17. Push Subscriptions Table
+CREATE TABLE IF NOT EXISTS public.subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  subscription JSONB NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  UNIQUE(user_id, subscription)
+);
+
 -- Triggers for updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -122,6 +238,7 @@ CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECU
 CREATE TRIGGER update_products_updated_at BEFORE UPDATE ON products FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON orders FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 CREATE TRIGGER update_installments_updated_at BEFORE UPDATE ON installments FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+CREATE TRIGGER update_kyc_verifications_updated_at BEFORE UPDATE ON kyc_verifications FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
@@ -131,9 +248,30 @@ ALTER TABLE public.installments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.wishlist ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cart_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.insurance_plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.kyc_verifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.referrals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_tiers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.auto_debit_subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.merchant_api_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_coaching_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- Basic Policies
 CREATE POLICY "Users can view their own data" ON public.users FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Public can view products" ON public.products FOR SELECT USING (true);
 CREATE POLICY "Users can view their own orders" ON public.orders FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can view their own installments" ON public.installments FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can view their own transactions" ON public.transactions FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can view their own notifications" ON public.notifications FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can view their own wishlist" ON public.wishlist FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can view their own cart items" ON public.cart_items FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Public can view insurance plans" ON public.insurance_plans FOR SELECT USING (true);
+CREATE POLICY "Users can view their own kyc verifications" ON public.kyc_verifications FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can view their own referrals" ON public.referrals FOR SELECT USING (auth.uid() = referrer_id OR auth.uid() = invitee_id);
+CREATE POLICY "Public can view user tiers" ON public.user_tiers FOR SELECT USING (true);
+CREATE POLICY "Users can view their own auto-debit subscriptions" ON public.auto_debit_subscriptions FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Merchants can view their API keys" ON public.merchant_api_keys FOR SELECT USING (auth.uid() = merchant_id);
+CREATE POLICY "Users can view their coaching logs" ON public.ai_coaching_logs FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can view their push subscriptions" ON public.subscriptions FOR SELECT USING (auth.uid() = user_id);

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Laptop, Eye, EyeOff } from 'lucide-react';
+import { Laptop } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -12,31 +12,19 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 
 export default function Login() {
-  const [showPassword, setShowPassword] = useState(false);
-  const { login: performLogin } = useApp();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
     const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
 
     try {
-      const res = await authService.login(email, password);
-      performLogin(res, res.token);
-      toast.success("Welcome back!");
-      navigate("/dashboard");
+      await authService.login(email);
+      toast.success("OTP sent to your email!");
+      navigate(`/verify-otp?email=${encodeURIComponent(email)}`);
     } catch (error: any) {
-      if (error.response?.data?.unverified) {
-        toast.error("Account not verified. Check your email.");
-        navigate(`/verify-otp?email=${encodeURIComponent(email)}`);
-      } else {
-        toast.error(
-          error.response?.data?.error ||
-            "Error. Please check your email and password.",
-        );
-      }
+      toast.error(error.response?.data?.error || "Failed to send OTP.");
     }
   };
 
@@ -139,7 +127,7 @@ export default function Login() {
               Welcome back
             </h1>
             <p className="text-muted-foreground font-medium">
-              Login to your account
+              Enter your email to receive a secure login code.
             </p>
           </div>
 
@@ -155,28 +143,6 @@ export default function Login() {
                 className="h-12 px-4 bg-secondary/20 border-border rounded-xl focus:ring-primary/20 transition-all font-medium"
                 required
               />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between ml-1">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Password</Label>
-                <Link to="/forgot-password" title="Recover Account" className="text-[10px] font-bold uppercase tracking-widest text-primary hover:underline">Forgot?</Link>
-              </div>
-              <div className="relative">
-                <Input 
-                  name="password" 
-                  type={showPassword ? "text" : "password"} 
-                  placeholder="••••••••" 
-                  className="h-12 px-4 bg-secondary/20 border-border rounded-xl focus:ring-primary/20 transition-all font-medium pr-12" 
-                  required 
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
             </div>
 
             <div className="pt-4">

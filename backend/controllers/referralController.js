@@ -1,19 +1,22 @@
-const Referral = require('../models/Referral');
-const User = require('../models/User');
+const supabase = require('../config/supabase');
 
 exports.getReferralStats = async (req, res) => {
   try {
     const userId = req.user.id;
-    const referrals = await Referral.find({ referrer_id: userId })
-      .populate('invitee_id', 'name email');
+    const { data: referrals, error } = await supabase
+      .from('referrals')
+      .select('*, users:invitee_id(name, email)')
+      .eq('referrer_id', userId);
 
-    const result = referrals.map(r => ({
-      ...r.toObject(),
-      invitee_name: r.invitee_id?.name,
-      invitee_email: r.invitee_id?.email
+    if (error) throw error;
+
+    const result = (referrals || []).map(r => ({
+      ...r,
+      invitee_name: r.users?.name,
+      invitee_email: r.users?.email
     }));
 
-    const rewardsEarned = referrals.filter(r => r.reward_claimed).length * 5000;
+    const rewardsEarned = (referrals || []).filter(r => r.reward_claimed).length * 5000;
 
     res.json({
       referralCode: userId,
@@ -35,17 +38,27 @@ exports.trackReferral = async (req, res) => {
     }
 
     // Check if already referred
-    const existing = await Referral.findOne({ invitee_id: inviteeId });
+    const { data: existing } = await supabase
+      .from('referrals')
+      .select('id')
+      .eq('invitee_id', inviteeId)
+      .single();
+
     if (existing) {
       return res.status(400).json({ error: "You have already been referred" });
     }
 
-    const referral = new Referral({
-      referrer_id: referrerId,
-      invitee_id: inviteeId,
-      status: 'pending'
-    });
-    await referral.save();
+    const { error: insertError } = await supabase
+      .from('referrals')
+      .insert([
+        {
+          referrer_id: referrerId,
+          invitee_id: inviteeId,
+          status: 'pending'
+        }
+      ]);
+
+    if (insertError) throw insertError;
 
     res.json({ message: "Referral tracked. Reward will be allocated after your first payment." });
   } catch (error) {
@@ -56,26 +69,30 @@ exports.trackReferral = async (req, res) => {
 exports.checkAndAwardReferral = async (userId) => {
   try {
     // Check if this user was referred
-    const referral = await Referral.findOne({ 
-      invitee_id: userId, 
-      status: 'pending', 
-      reward_claimed: false 
-    });
+    const { data: referral, error } = await supabase
+      .from('referrals')
+      .select('*')
+      .eq('invitee_id', userId)
+      .eq('status', 'pending')
+      .eq('reward_claimed', false)
+      .single();
 
-    if (!referral) return;
+    if (error || !referral) return;
 
     // Award ₦5,000 to referrer's credit limit
-    await User.findByIdAndUpdate(referral.referrer_id, {
-      $inc: { credit_limit: 5000 }
-    });
+    const { data: referrer } = await supabase.from('users').select('credit_limit').eq('id', referral.referrer_id).single();
+    const newLimit = (referrer?.credit_limit || 0) + 5000;
+    
+    await supabase.from('users').update({ credit_limit: newLimit }).eq('id', referral.referrer_id);
 
     // Update referral status
-    referral.status = 'completed';
-    referral.reward_claimed = true;
-    await referral.save();
+    await supabase
+      .from('referrals')
+      .update({ status: 'completed', reward_claimed: true })
+      .eq('id', referral.id);
 
     console.log(`Referral reward awarded to ${referral.referrer_id} for user ${userId}`);
   } catch (error) {
-    console.error('Referral Reward Error:', error);
+    console.error('Referral Reward Error:', error.message);
   }
 };

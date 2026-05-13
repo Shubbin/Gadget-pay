@@ -25,6 +25,7 @@ export default function Footer() {
               <Link to="/marketplace" className="hover:text-primary transition-colors">Shop</Link>
               <Link to="/calculator" className="hover:text-primary transition-colors">Calculator</Link>
               <Link to="/about" className="hover:text-primary transition-colors">About Us</Link>
+              <Link to="/developers" className="hover:text-primary transition-colors italic">Developer API</Link>
               <Link to="/contact" className="hover:text-primary transition-colors">Contact</Link>
             </div>
           </div>
@@ -48,7 +49,7 @@ export default function Footer() {
         </div>
         <div className="mt-24 border-t border-border/50 pt-10 flex flex-col md:flex-row justify-between items-center gap-6">
           <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">
-            © {new Date().getFullYear()} GadgetFlex. <span className="text-primary/40 italic">Accelerating progress.</span>
+            © {new Date().getFullYear()} Zenda. <span className="text-primary/40 italic">Accelerating progress.</span>
           </p>
           <div className="flex gap-8 text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.3em]">
             <span className="hover:text-primary cursor-pointer transition-colors hover:scale-110">Insta</span>

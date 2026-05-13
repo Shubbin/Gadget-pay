@@ -1,14 +1,17 @@
-const mongoose = require('mongoose');
-const User = require('../models/User');
-const Product = require('../models/Product');
-const Order = require('../models/Order');
-const Transaction = require('../models/Transaction');
+const supabase = require('../config/supabase');
 const flutterwaveService = require('../services/FlutterwaveService');
 
 exports.registerVendor = async (req, res) => {
   const userId = req.user.id;
   try {
-    const user = await User.findByIdAndUpdate(userId, { role: 'vendor' }, { new: true });
+    const { data: user, error } = await supabase
+      .from('users')
+      .update({ role: 'vendor' })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) throw error;
     res.json({ message: 'Welcome to the Vendor Community!', user });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -18,7 +21,13 @@ exports.registerVendor = async (req, res) => {
 exports.getVendorProducts = async (req, res) => {
   const vendorId = req.user.id;
   try {
-    const products = await Product.find({ vendor_id: vendorId }).sort({ created_at: -1 });
+    const { data: products, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('vendor_id', vendorId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
     res.json(products);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -28,27 +37,30 @@ exports.getVendorProducts = async (req, res) => {
 exports.getVendorStats = async (req, res) => {
   const vendorId = req.user.id;
   try {
-    const [user, productCount, orders] = await Promise.all([
-      User.findById(vendorId),
-      Product.countDocuments({ vendor_id: vendorId }),
-      Order.aggregate([
-        { $match: { vendor_id: new mongoose.Types.ObjectId(vendorId) } },
-        {
-          $group: {
-            _id: null,
-            totalSales: { $sum: 1 },
-            totalRevenue: { $sum: "$vendor_payout_amount" }
-          }
-        }
-      ])
+    const [
+      { data: user, error: uError },
+      { count: productCount, error: pError },
+      { data: orders, error: oError }
+    ] = await Promise.all([
+      supabase.from('users').select('*').eq('id', vendorId).single(),
+      supabase.from('products').select('*', { count: 'exact', head: true }).eq('vendor_id', vendorId),
+      supabase.from('orders').select('amount').eq('vendor_id', vendorId) // In Supabase schema vendor_id might need to be added to orders
     ]);
+
+    if (uError || pError || oError) {
+      // If vendor_id is not yet in orders table, fallback to 0 or handle gracefully
+      console.warn('Order fetch error for vendor stats:', oError?.message);
+    }
+
+    const totalSales = (orders || []).length;
+    const totalRevenue = (orders || []).reduce((sum, o) => sum + Number(o.amount), 0);
 
     res.json({
       productCount,
-      totalSales: orders[0]?.totalSales || 0,
-      totalRevenue: orders[0]?.totalRevenue || 0,
-      escrowBalance: user?.settled_payout_balance || 0, // Available for withdrawal
-      pendingPayout: user?.pending_payout_balance || 0 // In escrow/hold
+      totalSales,
+      totalRevenue,
+      escrowBalance: user?.settled_payout_balance || 0,
+      pendingPayout: user?.pending_payout_balance || 0
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -58,22 +70,27 @@ exports.getVendorStats = async (req, res) => {
 exports.getVendorSalesHistory = async (req, res) => {
   const vendorId = req.user.id;
   try {
-    const history = await Order.aggregate([
-      { $match: { vendor_id: new mongoose.Types.ObjectId(vendorId) } },
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$created_at" } },
-          sales: { $sum: "$vendor_payout_amount" }
-        }
-      },
-      { $sort: { _id: 1 } },
-      { $limit: 7 }
-    ]);
+    const { data: orders, error } = await supabase
+      .from('orders')
+      .select('amount, created_at')
+      .eq('vendor_id', vendorId)
+      .order('created_at', { ascending: true });
 
-    res.json(history.map(r => ({ 
-        name: new Date(r._id).toLocaleDateString('en-US', { weekday: 'short' }), 
-        sales: r.sales 
-    })));
+    if (error) throw error;
+
+    // Group by date
+    const historyMap = (orders || []).reduce((acc, o) => {
+      const date = new Date(o.created_at).toISOString().split('T')[0];
+      acc[date] = (acc[date] || 0) + Number(o.amount);
+      return acc;
+    }, {});
+
+    const result = Object.entries(historyMap).slice(-7).map(([date, sales]) => ({
+      name: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }),
+      sales
+    }));
+
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -84,42 +101,48 @@ exports.requestPayout = async (req, res) => {
   const { amount } = req.body;
 
   try {
-    const vendor = await User.findById(vendorId);
-    if (!vendor || vendor.role !== 'vendor') return res.status(403).json({ error: 'Access denied' });
+    const { data: vendor, error: vError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', vendorId)
+      .single();
+
+    if (vError || !vendor || vendor.role !== 'vendor') return res.status(403).json({ error: 'Access denied' });
 
     if (amount > vendor.settled_payout_balance) {
       return res.status(400).json({ error: 'Insufficient settled balance' });
     }
 
-    if (!vendor.bank_details?.account_number || !vendor.bank_details?.bank_name) {
+    const bankDetails = vendor.bank_details || {};
+    if (!bankDetails.account_number || !bankDetails.bank_name) {
       return res.status(400).json({ error: 'Bank details not configured' });
     }
 
     // Initiate Transfer via Flutterwave
     const payout = await flutterwaveService.initiateTransfer({
-      account_bank: vendor.bank_details.bank_name, 
-      account_number: vendor.bank_details.account_number,
+      account_bank: bankDetails.bank_name, 
+      account_number: bankDetails.account_number,
       amount: amount,
       narration: `GadgetFlex Payout for ${vendor.name}`
     });
 
     if (payout.status === 'success') {
       // Deduct balance
-      vendor.settled_payout_balance -= amount;
-      await vendor.save();
+      const newBalance = vendor.settled_payout_balance - amount;
+      await supabase.from('users').update({ settled_payout_balance: newBalance }).eq('id', vendorId);
 
       // Log transaction
-      await Transaction.create({
+      await supabase.from('transactions').insert([{
         user_id: vendorId,
         amount: amount,
         type: 'payout',
-        status: 'completed',
-        metadata: { flutterwave_ref: payout.data.reference }
-      });
+        status: 'success',
+        reference: payout.data.reference
+      }]);
 
       res.json({ message: 'Payout initiated successfully', data: payout.data });
     } else {
-      res.status(400).json({ error: 'Payout initiation failed', details: payout.message });
+      res.status(400).json({ error: payout.message || 'Payout initiation failed' });
     }
   } catch (error) {
     res.status(500).json({ error: error.message });

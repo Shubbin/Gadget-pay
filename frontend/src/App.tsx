@@ -4,6 +4,7 @@ import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { TooltipProvider } from "@radix-ui/react-tooltip";
 import { AppProvider } from "@/context/AppContext";
+import { Toaster } from "@/components/ui/sonner";
 
 // Layouts
 import MainLayout from "@/layouts/MainLayout";
@@ -28,6 +29,7 @@ import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
 import VerifyOTP from "@/pages/auth/VerifyOTP";
 import ForgotPassword from "@/pages/auth/ForgotPassword";
+import ResetPassword from "@/pages/auth/ResetPassword";
 
 // Dashboard pages
 import DashboardHome from "@/pages/dashboard/DashboardHome";
@@ -52,6 +54,8 @@ import AdminTransactions from "@/pages/admin/AdminTransactions";
 import SuperAdminDashboard from "@/pages/admin/SuperAdminDashboard";
 import SupportDashboard from "@/pages/dashboard/SupportDashboard";
 import AdminAnalytics from "@/pages/admin/AdminAnalytics";
+import Developers from "@/pages/public/Developers";
+import ApiSettings from "@/pages/dashboard/ApiSettings";
 
 import NotFound from "./pages/NotFound";
 
@@ -73,6 +77,7 @@ const App = () => (
           pauseOnHover
           theme="light"
         />
+        <Toaster />
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<MainLayout><Home /></MainLayout>} />
@@ -83,12 +88,14 @@ const App = () => (
           <Route path="/contact" element={<MainLayout><Contact /></MainLayout>} />
           <Route path="/terms" element={<MainLayout><Terms /></MainLayout>} />
           <Route path="/privacy" element={<MainLayout><Privacy /></MainLayout>} />
+          <Route path="/developers" element={<MainLayout><Developers /></MainLayout>} />
 
           {/* Auth routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/verify-otp" element={<VerifyOTP />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           {/* Dashboard routes */}
           <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout><DashboardHome /></DashboardLayout></ProtectedRoute>} />
@@ -101,6 +108,7 @@ const App = () => (
           <Route path="/dashboard/payment-methods" element={<ProtectedRoute><DashboardLayout><PaymentMethods /></DashboardLayout></ProtectedRoute>} />
           <Route path="/dashboard/notifications" element={<ProtectedRoute><DashboardLayout><Notifications /></DashboardLayout></ProtectedRoute>} />
           <Route path="/dashboard/referrals" element={<ProtectedRoute><DashboardLayout><ReferralHistory /></DashboardLayout></ProtectedRoute>} />
+          <Route path="/dashboard/api" element={<ProtectedRoute allowedRoles={['vendor', 'super_admin']}><DashboardLayout><ApiSettings /></DashboardLayout></ProtectedRoute>} />
           <Route path="/dashboard/vendor" element={<ProtectedRoute allowedRoles={['vendor', 'super_admin']}><DashboardLayout><VendorDashboard /></DashboardLayout></ProtectedRoute>} />
           <Route path="/dashboard/support" element={<ProtectedRoute allowedRoles={['customer_care', 'super_admin']}><DashboardLayout><SupportDashboard /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/super" element={<ProtectedRoute allowedRoles={['super_admin']}><AdminLayout><SuperAdminDashboard /></AdminLayout></ProtectedRoute>} />

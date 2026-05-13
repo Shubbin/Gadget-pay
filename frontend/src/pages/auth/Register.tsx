@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Laptop, Eye, EyeOff } from 'lucide-react';
+import { Laptop } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -11,9 +11,6 @@ import { toast } from "react-toastify";
 import { motion } from 'framer-motion';
 
 export default function Register() {
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const { login } = useApp();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -22,15 +19,12 @@ export default function Register() {
     const firstName = formData.get('firstName') as string;
     const lastName = formData.get('lastName') as string;
     const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
+    const name = `${firstName} ${lastName}`;
 
     try {
-      const res = await authService.register({ name: `${firstName} ${lastName}`, email, password });
-      console.log('--- [DEV MODE] OTP INSPECTION ---');
-      console.log('Registration Response:', res);
-      console.log('---------------------------------');
-      toast.success('Registration successful! Please check your email to verify your account.');
-      navigate('/login');
+      await authService.register({ name, email });
+      toast.success('Registration initiated! Please check your email for the verification code.');
+      navigate(`/verify-otp?email=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}`);
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Registration failed.');
     }
@@ -119,7 +113,7 @@ export default function Register() {
 
           <div className="mb-10 text-center lg:text-left">
             <h1 className="text-3xl font-bold text-foreground tracking-tight mb-2">Sign up</h1>
-            <p className="text-muted-foreground font-medium">Create your account</p>
+            <p className="text-muted-foreground font-medium">Create your account and verify your email via secure code.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -137,47 +131,6 @@ export default function Register() {
             <div className="space-y-2">
               <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Email Address</Label>
               <Input name="email" type="email" placeholder="email@example.com" className="h-12 px-4 bg-secondary/20 border-border rounded-xl focus:ring-primary/20 transition-all font-medium" required />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Password</Label>
-                <div className="relative">
-                  <Input 
-                    name="password" 
-                    type={showPassword ? "text" : "password"} 
-                    placeholder="••••••••" 
-                    className="h-12 px-4 bg-secondary/20 border-border rounded-xl focus:ring-primary/20 transition-all font-medium pr-12" 
-                    required 
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Confirm</Label>
-                <div className="relative">
-                  <Input 
-                    name="confirmPassword" 
-                    type={showConfirmPassword ? "text" : "password"} 
-                    placeholder="••••••••" 
-                    className="h-12 px-4 bg-secondary/20 border-border rounded-xl focus:ring-primary/20 transition-all font-medium pr-12" 
-                    required 
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
-                  >
-                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
             </div>
             
             <div className="flex items-center px-1">

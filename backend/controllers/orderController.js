@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const settlementService = require('../services/SettlementService');
+const emailService = require('../services/emailService');
 
 exports.getOrders = async (req, res) => {
   try {
@@ -92,6 +93,61 @@ exports.getOrderStats = async (req, res) => {
       counts,
       totalBalance
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.requestDeliveryCode = async (req, res) => {
+  const { orderId } = req.body;
+  try {
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Store OTP in order record (or a separate codes table)
+    const { error } = await supabase
+      .from('orders')
+      .update({ delivery_otp: otp })
+      .eq('id', orderId);
+
+    if (error) throw error;
+
+    await emailService.sendDeliveryOTP(req.user.email, orderId, otp);
+
+    res.json({ message: 'Delivery code sent to your email.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.confirmDelivery = async (req, res) => {
+  const { orderId, otp } = req.body;
+  try {
+    const { data: order, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('id', orderId)
+      .single();
+
+    if (error || !order) throw new Error('Order not found');
+
+    if (order.delivery_otp !== otp) {
+      return res.status(400).json({ error: 'Invalid delivery code.' });
+    }
+
+    // Update status and clear OTP
+    await supabase
+      .from('orders')
+      .update({ 
+        status: 'delivered', 
+        delivery_otp: null,
+        delivered_at: new Date().toISOString() 
+      })
+      .eq('id', orderId);
+
+    // Trigger vendor settlement if applicable
+    await settlementService.settleFunds(orderId);
+
+    res.json({ message: 'Delivery confirmed successfully!' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

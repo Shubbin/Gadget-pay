@@ -10,10 +10,10 @@ export const productService = {
 };
 
 export const authService = {
-  login: (email: string, password: string) => api.post('/auth/login', { email, password }).then(res => res.data),
-  register: (data: { name: string; email: string; password: string }) => api.post('/auth/register', data).then(res => res.data),
-  forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }).then(res => res.data),
-  resetPassword: (token: string, password: string) => api.post('/auth/reset-password', { token, password }).then(res => res.data),
+  login: (email: string) => api.post('/auth/login', { email }).then(res => res.data),
+  register: (data: { name: string; email: string }) => api.post('/auth/register', data).then(res => res.data),
+  verifyOTP: (email: string, token: string, name?: string) => api.post('/auth/verify-otp', { email, token, name }).then(res => res.data),
+  resendOTP: (email: string) => api.post('/auth/login', { email }).then(res => res.data),
   getProfile: () => api.get('/auth/profile').then(res => res.data),
   updateProfile: (data: { name?: string; card_design?: string; is_card_active?: boolean }) => api.put('/auth/profile', data).then(res => res.data),
   activateCard: () => api.post('/auth/activate-card').then(res => res.data),
@@ -24,6 +24,8 @@ export const orderService = {
   getById: (id: string) => api.get(`/orders/${id}`).then(res => res.data),
   create: (data: any) => api.post('/orders', data).then(res => res.data),
   getStats: () => api.get('/orders/stats').then(res => res.data),
+  requestDeliveryCode: (orderId: string) => api.post('/orders/delivery-code', { orderId }).then(res => res.data),
+  confirmDelivery: (orderId: string, otp: string) => api.post('/orders/confirm-delivery', { orderId, otp }).then(res => res.data),
 };
 
 export const installmentService = {

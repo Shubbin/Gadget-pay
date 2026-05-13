@@ -25,7 +25,7 @@ export default function Navbar() {
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-white shadow-lg shadow-primary/20">
             <Laptop className="h-5 w-5" />
           </div>
-          <span className="text-xl font-black text-foreground uppercase tracking-tighter">Gadget<span className="text-primary italic">Flex</span></span>
+          <span className="text-xl font-black text-foreground uppercase tracking-tighter">Zenda<span className="text-primary italic">.</span></span>
         </Link>
 
         <div className="hidden items-center gap-8 lg:flex">

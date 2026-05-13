@@ -1,21 +1,26 @@
-const Product = require('../models/Product');
-const Wishlist = require('../models/Wishlist');
-const Order = require('../models/Order');
+const supabase = require('../config/supabase');
 
 exports.getRecommendations = async (req, res) => {
   const { productId } = req.params;
   try {
-    const targetProduct = await Product.findById(productId);
-    if (!targetProduct) throw new Error('Product not found');
+    const { data: targetProduct, error: pError } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', productId)
+      .single();
 
-    // Simple Recommendation: Same category, excluding current product
-    const recommendations = await Product.find({
-      _id: { $ne: productId },
-      $or: [
-        { category: targetProduct.category },
-        { tags: { $in: targetProduct.tags || [] } }
-      ]
-    }).limit(4);
+    if (pError || !targetProduct) throw new Error('Product not found');
+
+    // Simple Recommendation: Same category or overlapping tags
+    // Supabase filtering for tags (array) uses 'overlaps'
+    const { data: recommendations, error: rError } = await supabase
+      .from('products')
+      .select('*')
+      .neq('id', productId)
+      .or(`category.eq.${targetProduct.category},tags.ov.{${(targetProduct.tags || []).join(',')}}`)
+      .limit(4);
+
+    if (rError) throw rError;
 
     res.json(recommendations);
   } catch (error) {
@@ -28,13 +33,22 @@ exports.getPersonalizedSuggestions = async (req, res) => {
     const userId = req.user.id;
     
     // Get products already in wishlist
-    const wishlistedItems = await Wishlist.find({ user_id: userId }).select('product_id');
-    const wishlistedIds = wishlistedItems.map(i => i.product_id);
+    const { data: wishlistedItems } = await supabase
+      .from('wishlist')
+      .select('product_id')
+      .eq('user_id', userId);
+
+    const wishlistedIds = (wishlistedItems || []).map(i => i.product_id);
 
     // Find products not in wishlist
-    const suggestions = await Product.find({
-      _id: { $nin: wishlistedIds }
-    }).limit(6);
+    let query = supabase.from('products').select('*');
+    if (wishlistedIds.length > 0) {
+      query = query.not('id', 'in', `(${wishlistedIds.join(',')})`);
+    }
+
+    const { data: suggestions, error: sError } = await query.limit(6);
+
+    if (sError) throw sError;
 
     res.json(suggestions);
   } catch (error) {

@@ -25,7 +25,7 @@ const runReminderCheck = async () => {
       const user = ins.users;
       if (!user) continue;
 
-      const message = `Friendly reminder: Your GadgetFlex payment of ${ins.remaining_balance} is due on ${new Date(ins.next_payment_date).toLocaleDateString()}.`;
+      const message = `Friendly reminder: Your Zenda payment of ${ins.remaining_balance} is due on ${new Date(ins.next_payment_date).toLocaleDateString()}.`;
       
       const { error: notifError } = await supabase
         .from('notifications')
@@ -38,7 +38,7 @@ const runReminderCheck = async () => {
           }
         ]);
 
-      if (user.email) await sendEmail(user.email, 'GadgetFlex Payment Reminder', message);
+      if (user.email) await sendEmail(user.email, 'Zenda Payment Reminder', message);
     }
   } catch (error) { console.error('Reminder Check failed:', error); }
 };

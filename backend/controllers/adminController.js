@@ -1,23 +1,27 @@
-const User = require('../models/User');
-const Order = require('../models/Order');
-const Transaction = require('../models/Transaction');
-const Installment = require('../models/Installment');
+const supabase = require('../config/supabase');
 
 exports.getAnalytics = async (req, res) => {
   try {
-    const [userCount, orderCount, revenueSum] = await Promise.all([
-      User.countDocuments(),
-      Order.countDocuments(),
-      Transaction.aggregate([
-        { $match: { status: 'success' } },
-        { $group: { _id: null, total: { $sum: "$amount" } } }
-      ])
+    const [
+      { count: userCount, error: userError },
+      { count: orderCount, error: orderError },
+      { data: transactions, error: transError }
+    ] = await Promise.all([
+      supabase.from('users').select('*', { count: 'exact', head: true }),
+      supabase.from('orders').select('*', { count: 'exact', head: true }),
+      supabase.from('transactions').select('amount').eq('status', 'success')
     ]);
+
+    if (userError || orderError || transError) {
+      throw userError || orderError || transError;
+    }
+
+    const totalRevenue = transactions.reduce((sum, t) => sum + Number(t.amount), 0);
 
     res.json({
       totalUsers: userCount,
       totalOrders: orderCount,
-      totalRevenue: revenueSum[0]?.total || 0,
+      totalRevenue,
       activePlans: orderCount
     });
   } catch (error) {
@@ -27,29 +31,36 @@ exports.getAnalytics = async (req, res) => {
 
 exports.getDashboard = async (req, res) => {
   try {
-    const [users, orders, revenue, installments, debt, recentOrders] = await Promise.all([
-      User.countDocuments(),
-      Order.countDocuments(),
-      Order.aggregate([
-        { $match: { status: 'completed' } },
-        { $group: { _id: null, total: { $sum: "$total_amount" } } }
-      ]),
-      Installment.countDocuments(),
-      Installment.aggregate([
-        { $group: { _id: null, total: { $sum: "$remaining_balance" } } }
-      ]),
-      Order.find().populate('product_id').sort({ created_at: -1 }).limit(10)
+    const [
+      { count: userCount },
+      { count: orderCount },
+      { data: successOrders },
+      { count: installmentCount },
+      { data: activeInstallments },
+      { data: recentOrders, error: recentError }
+    ] = await Promise.all([
+      supabase.from('users').select('*', { count: 'exact', head: true }),
+      supabase.from('orders').select('*', { count: 'exact', head: true }),
+      supabase.from('orders').select('amount').eq('status', 'delivered'), // Assuming delivered = revenue
+      supabase.from('installments').select('*', { count: 'exact', head: true }),
+      supabase.from('installments').select('remaining_balance').eq('status', 'active'),
+      supabase.from('orders').select('*, products:product_id(name)').order('created_at', { ascending: false }).limit(10)
     ]);
 
+    if (recentError) throw recentError;
+
+    const totalRevenue = (successOrders || []).reduce((sum, o) => sum + Number(o.amount), 0);
+    const outstandingDebt = (activeInstallments || []).reduce((sum, i) => sum + Number(i.remaining_balance), 0);
+
     res.json({
-      userCount: users,
-      orderCount: orders,
-      revenue: revenue[0]?.total || 0,
-      installmentCount: installments,
-      outstandingDebt: debt[0]?.total || 0,
+      userCount,
+      orderCount,
+      revenue: totalRevenue,
+      installmentCount,
+      outstandingDebt,
       recentOrders: recentOrders.map(o => ({
-        ...o.toObject(),
-        product_name: o.product_id?.name
+        ...o,
+        product_name: o.products?.name
       }))
     });
   } catch (error) {
@@ -59,8 +70,23 @@ exports.getDashboard = async (req, res) => {
 
 exports.getUsers = async (req, res) => {
   try {
-    const users = await User.find().select('id name email role created_at');
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('id, name, email, role, created_at')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
     res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.runReminders = async (req, res) => {
+  const reminderService = require('../services/ReminderService');
+  try {
+    await reminderService.processDailyReminders();
+    res.json({ message: 'AI Reminder cycle completed successfully.' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

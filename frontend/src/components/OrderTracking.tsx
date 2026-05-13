@@ -1,12 +1,11 @@
 import { motion } from 'framer-motion';
 import { 
   CheckCircle2, 
-  Circle, 
   Truck, 
   Package, 
-  MapPin, 
   Clock, 
-  ShieldCheck 
+  ShieldCheck,
+  AlertCircle
 } from 'lucide-react';
 
 interface TrackingStep {
@@ -17,39 +16,63 @@ interface TrackingStep {
 }
 
 const STEPS: TrackingStep[] = [
-  { status: 'Order Placed', label: 'Order Placed', description: 'Your order has been received.', icon: Clock },
-  { status: 'Processing', label: 'Processing', description: 'Vendor is preparing your gadget.', icon: ShieldCheck },
-  { status: 'Packed & Ready', label: 'Packed', description: 'Package is ready for pickup.', icon: Package },
-  { status: 'With Courier', label: 'With Courier', description: 'Courier has picked up your package.', icon: CheckCircle2 },
-  { status: 'In Transit', label: 'In Transit', description: 'Package is on its way to your city.', icon: Truck },
-  { status: 'Out for Delivery', label: 'Final Leg', description: 'Courier is arriving at your location.', icon: MapPin },
-  { status: 'Delivered', label: 'Delivered', description: 'Enjoy your new gadget!', icon: CheckCircle2 }
+  { status: 'pending', label: 'Order Placed', description: 'Your order has been received.', icon: Clock },
+  { status: 'processing', label: 'Processing', description: 'Vendor is preparing your gadget.', icon: ShieldCheck },
+  { status: 'shipped', label: 'In Transit', description: 'Package is on its way to you.', icon: Truck },
+  { status: 'delivered', label: 'Delivered', description: 'Enjoy your new gadget!', icon: CheckCircle2 }
 ];
 
 export default function OrderTracking({ currentStatus }: { currentStatus: string }) {
-  const currentIndex = STEPS.findIndex(s => s.status === currentStatus);
-  const activeIndex = currentIndex === -1 ? 0 : currentIndex;
+  const activeIndex = STEPS.findIndex(s => s.status === currentStatus);
+  const displayIndex = activeIndex === -1 ? 0 : activeIndex;
+
+  if (currentStatus === 'cancelled') {
+    return (
+      <div className="flex flex-col items-center justify-center p-10 rounded-[2.5rem] bg-slate-50 border border-slate-100 text-center">
+        <div className="h-16 w-16 rounded-3xl bg-slate-200 text-slate-400 flex items-center justify-center mb-4">
+          <AlertCircle className="h-8 w-8" />
+        </div>
+        <h4 className="text-xl font-black text-slate-400 uppercase tracking-tight">Order Cancelled</h4>
+        <p className="text-sm font-bold text-slate-400 mt-2">This order has been voided and is no longer active.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="py-10">
       <div className="relative">
         {/* Progress Line */}
-        <div className="absolute left-[23px] top-0 bottom-0 w-0.5 bg-slate-100 lg:left-0 lg:right-0 lg:top-[23px] lg:bottom-auto lg:h-0.5 lg:w-full">
+        <div className="absolute left-[23px] top-0 bottom-0 w-0.5 bg-slate-100 lg:left-0 lg:right-0 lg:top-[23px] lg:bottom-auto lg:h-0.5 lg:w-full overflow-hidden">
           <motion.div 
             initial={{ width: 0, height: 0 }}
             animate={{ 
-              width: window.innerWidth > 1024 ? `${(activeIndex / (STEPS.length - 1)) * 100}%` : '100%',
-              height: window.innerWidth <= 1024 ? `${(activeIndex / (STEPS.length - 1)) * 100}%` : '100%'
+              width: '100%',
+              height: '100%'
             }}
-            className="bg-primary h-full w-full"
+            transition={{ duration: 1 }}
+            className="bg-primary"
+            style={{ 
+              clipPath: `polygon(0 0, ${typeof window !== 'undefined' && window.innerWidth > 1024 ? (displayIndex / (STEPS.length - 1)) * 100 : 100}% 0, ${typeof window !== 'undefined' && window.innerWidth > 1024 ? (displayIndex / (STEPS.length - 1)) * 100 : 100}% 100%, 0 100%)`
+            }}
+          />
+          {/* Mobile height scale - cleaner to use scaleY or similar but let's use a simpler approach */}
+          <motion.div 
+            initial={{ height: 0 }}
+            animate={{ height: `${(displayIndex / (STEPS.length - 1)) * 100}%` }}
+            className="bg-primary absolute inset-0 lg:hidden"
+          />
+          <motion.div 
+            initial={{ width: 0 }}
+            animate={{ width: `${(displayIndex / (STEPS.length - 1)) * 100}%` }}
+            className="bg-primary absolute inset-0 hidden lg:block"
           />
         </div>
 
         {/* Steps */}
         <div className="flex flex-col lg:flex-row justify-between relative z-10 gap-8 lg:gap-0">
           {STEPS.map((step, i) => {
-            const isCompleted = i < activeIndex;
-            const isActive = i === activeIndex;
+            const isCompleted = i < displayIndex;
+            const isActive = i === displayIndex;
             const Icon = step.icon;
 
             return (

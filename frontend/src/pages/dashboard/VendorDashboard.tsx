@@ -98,9 +98,16 @@ export default function VendorDashboard() {
           <h1 className="text-4xl font-black text-foreground tracking-tight">Business Insights</h1>
           <p className="mt-1 text-muted-foreground font-medium">Track your performance and manage your payouts.</p>
         </div>
-        <Button className="h-14 px-10 rounded-xl bg-primary text-white font-bold shadow-md hover:shadow-lg transition-all gap-2">
-          <Plus className="h-5 w-5" /> Add New Gadget
-        </Button>
+        <div className="flex items-center gap-4">
+          <Link to="/dashboard/api">
+            <Button variant="outline" className="h-14 px-8 rounded-xl border-slate-200 bg-white font-bold transition-all gap-2">
+              <Terminal className="h-5 w-5 text-primary" /> API Settings
+            </Button>
+          </Link>
+          <Button className="h-14 px-10 rounded-xl bg-primary text-white font-bold shadow-md hover:shadow-lg transition-all gap-2">
+            <Plus className="h-5 w-5" /> Add New Gadget
+          </Button>
+        </div>
       </div>
 
       {/* Stats Grid */}

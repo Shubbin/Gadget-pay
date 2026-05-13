@@ -1,4 +1,4 @@
-const { query } = require('../config/db');
+const supabase = require('../config/supabase');
 
 /**
  * Pillar 4: Logistics & Fulfillment
@@ -6,13 +6,10 @@ const { query } = require('../config/db');
  */
 
 const LOGISTICS_STEPS = [
-  'Order Placed',
-  'Processing',
-  'Packed & Ready',
-  'With Courier',
-  'In Transit',
-  'Out for Delivery',
-  'Delivered'
+  'pending',
+  'processing',
+  'shipped',
+  'delivered'
 ];
 
 exports.updateTrackingStatus = async () => {
@@ -20,30 +17,38 @@ exports.updateTrackingStatus = async () => {
   
   try {
     // 1. Find active orders (not delivered yet)
-    const { rows: activeOrders } = await query(`
-      SELECT o.id, o.status, o.created_at 
-      FROM orders o 
-      WHERE o.status != 'delivered' AND o.status != 'cancelled'
-    `);
+    const { data: activeOrders, error: fetchError } = await supabase
+      .from('orders')
+      .select('id, status')
+      .not('status', 'in', '("delivered","cancelled")');
 
-    for (const order of activeOrders) {
+    if (fetchError) throw fetchError;
+
+    for (const order of (activeOrders || [])) {
       const currentIndex = LOGISTICS_STEPS.indexOf(order.status) === -1 ? 0 : LOGISTICS_STEPS.indexOf(order.status);
       
-      // Move to next step with some probability or time logic
+      // Move to next step
       if (currentIndex < LOGISTICS_STEPS.length - 1) {
         const nextStatus = LOGISTICS_STEPS[currentIndex + 1];
         console.log(`Moving Order ${order.id} from ${order.status} to ${nextStatus}`);
         
-        await query("UPDATE orders SET status = $1 WHERE id = $2", [nextStatus, order.id]);
+        await supabase
+          .from('orders')
+          .update({ status: nextStatus })
+          .eq('id', order.id);
         
-        // Also update corresponding installment status if it's the first delivery
-        if (nextStatus === 'Delivered') {
-           await query("UPDATE installments SET status = 'active' WHERE order_id = $1 AND status = 'pending'", [order.id]);
+        // Also update corresponding installment status if delivered
+        if (nextStatus === 'delivered') {
+           await supabase
+             .from('installments')
+             .update({ status: 'active' })
+             .eq('order_id', order.id)
+             .eq('status', 'pending');
         }
       }
     }
 
   } catch (err) {
-    console.error('Logistics update failed:', err);
+    console.error('Logistics update failed:', err.message);
   }
 };

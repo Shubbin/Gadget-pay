@@ -40,8 +40,8 @@ const benefits = [
 ];
 
 const testimonials = [
-  { name: 'Sarah M.', role: 'Designer', text: 'GadgetFlex made it possible to get my MacBook Pro without breaking the bank. The monthly payments are very manageable!', rating: 5 },
-  { name: 'James K.', role: 'Developer', text: 'I couldn\'t afford a new laptop upfront. GadgetFlex let me get one and pay weekly. Incredible service!', rating: 5 },
+  { name: 'Sarah M.', role: 'Designer', text: 'Zenda made it possible to get my MacBook Pro without breaking the bank. The monthly payments are very manageable!', rating: 5 },
+  { name: 'James K.', role: 'Developer', text: 'I couldn\'t afford a new laptop upfront. Zenda let me get one and pay weekly. Incredible service!', rating: 5 },
   { name: 'Amara O.', role: 'Business Owner', text: 'I got phones for my whole team. Being able to pay bit by bit is a life saver.', rating: 5 },
 ];
 
@@ -267,7 +267,7 @@ export default function Home() {
         <div className="container mx-auto px-4">
           <div className="mb-20">
             <p className="text-[10px] font-bold text-primary uppercase tracking-[0.3em] mb-4">Why choose us</p>
-            <h2 className="text-4xl lg:text-5xl font-black tracking-tighter text-foreground">The GadgetFlex way</h2>
+            <h2 className="text-4xl lg:text-5xl font-black tracking-tighter text-foreground">The Zenda way</h2>
             <p className="mt-4 text-xl font-medium text-muted-foreground/60">We make it easy for you to own the best technology.</p>
           </div>
           <div className="grid gap-6 md:grid-cols-3">
@@ -299,7 +299,7 @@ export default function Home() {
             <p className="text-[10px] font-bold text-primary uppercase tracking-[0.3em] mb-4">Wall of fame</p>
             <h2 className="text-4xl lg:text-5xl font-black tracking-tighter text-foreground">What our customers say</h2>
             <p className="mt-4 text-lg text-muted-foreground/60 font-medium max-w-2xl mx-auto">
-              Join thousands of Nigerians using GadgetFlex to upgrade their lives with smart, manageable payments.
+              Join thousands of Nigerians using Zenda to upgrade their lives with smart, manageable payments.
             </p>
           </div>
           <div className="grid gap-8 md:grid-cols-3">

@@ -11,6 +11,7 @@ import { motion } from 'framer-motion';
 export default function VerifyOTP() {
   const [searchParams] = useSearchParams();
   const email = searchParams.get('email') || '';
+  const name = searchParams.get('name') || '';
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -53,7 +54,7 @@ export default function VerifyOTP() {
 
     setIsLoading(true);
     try {
-      const res = await authService.verifyOTP(email, otpString);
+      const res = await authService.verifyOTP(email, otpString, name);
       login(res, res.token);
       toast.success('Account verified! Welcome to GadgetFlex.');
       navigate('/dashboard');

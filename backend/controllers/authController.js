@@ -1,87 +1,89 @@
 const supabase = require('../config/supabase');
-const { sendOTP } = require('../services/emailService');
+const crypto = require('crypto');
 
-exports.register = async (req, res) => {
-  const { name, email, password } = req.body;
+/**
+ * GadgetFlex Auth Controller
+ */
+
+// 1. Request Email OTP (Login/Signup)
+exports.requestOtp = async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required' });
 
   try {
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signInWithOtp({
       email,
-      password,
       options: {
-        data: { name }
+        shouldCreateUser: true
       }
     });
 
-    if (authError) throw authError;
-
-    // Create profile in public.users table
-    const { error: profileError } = await supabase
-      .from('users')
-      .insert([
-        {
-          id: authData.user.id,
-          name,
-          email,
-          role: 'user',
-          tier: 'Bronze',
-          is_verified: false // Supabase handles email verification if enabled, but we follow your flow
-        }
-      ]);
-
-    if (profileError) throw profileError;
-
-    res.status(201).json({
-      message: 'Registration successful. Please verify your email via the link sent.',
-      email: email,
-      id: authData.user.id
-    });
+    if (error) throw error;
+    res.json({ message: 'OTP sent! Please check your email for the 6-digit code.' });
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    res.status(500).json({ error: error.message });
   }
 };
 
-exports.verifyOTP = async (req, res) => {
-  // Supabase Auth usually uses email links or OTPs internally.
-  // For your custom flow, we'll assume the user clicked a link or we manually verify.
-  res.json({ message: 'Supabase manages verification via email links by default.' });
-};
-
-exports.login = async (req, res) => {
-  const { email, password } = req.body;
+// 2. Verify Email OTP
+exports.verifyOtp = async (req, res) => {
+  const { email, token, name } = req.body; // 'name' may be passed during signup
+  if (!email || !token) return res.status(400).json({ error: 'Email and code are required' });
 
   try {
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    const { data: authData, error: authError } = await supabase.auth.verifyOtp({
       email,
-      password
+      token,
+      type: 'email'
     });
 
     if (authError) throw authError;
 
-    // Fetch user profile
-    const { data: user, error: profileError } = await supabase
+    // Check if user profile exists in public.users
+    let { data: user, error: profileError } = await supabase
       .from('users')
       .select('*')
       .eq('id', authData.user.id)
       .single();
 
-    if (profileError) throw profileError;
+    if (profileError || !user) {
+      // Create profile for new user
+      const { data: newUser, error: createError } = await supabase
+        .from('users')
+        .insert([
+          {
+            id: authData.user.id,
+            name: name || authData.user.user_metadata?.name || 'User',
+            email,
+            role: 'user',
+            tier: 'Bronze',
+            is_verified: true
+          }
+        ])
+        .select()
+        .single();
+
+      if (createError) throw createError;
+      user = newUser;
+    }
 
     res.json({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      tier: user.tier || 'Bronze',
-      risk_score: user.risk_score,
-      credit_limit: user.credit_limit,
-      card_design: user.card_design,
-      is_card_active: user.is_card_active,
+      message: 'Login successful',
       token: authData.session.access_token,
-      refresh_token: authData.session.refresh_token
+      refresh_token: authData.session.refresh_token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        tier: user.tier || 'Bronze',
+        risk_score: user.risk_score,
+        credit_limit: user.credit_limit,
+        is_card_active: user.is_card_active
+      }
     });
   } catch (error) {
-    res.status(401).json({ error: 'Invalid email or password' });
+    res.status(401).json({ error: 'Invalid or expired code' });
   }
 };
 
@@ -117,6 +119,33 @@ exports.activateCard = async (req, res) => {
     
     if (error) throw error;
     res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 3. Forgot Password
+exports.forgotPassword = async (req, res) => {
+  const { email } = req.body;
+  try {
+    const frontendUrl = process.env.FRONTEND_URL || 'https://gadgetflex.vercel.app';
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${frontendUrl}/reset-password`
+    });
+    if (error) throw error;
+    res.json({ message: 'Reset link sent to your email.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 4. Update Password
+exports.updatePassword = async (req, res) => {
+  const { newPassword } = req.body;
+  try {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+    res.json({ message: 'Password updated successfully!' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

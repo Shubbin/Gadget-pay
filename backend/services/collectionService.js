@@ -1,4 +1,4 @@
-const { query } = require('../config/db');
+const supabase = require('../config/supabase');
 const { chargeAuthorization } = require('./paystackService');
 const { sendEmail } = require('./emailService');
 
@@ -15,64 +15,76 @@ exports.processCollection = async () => {
   
   try {
     // 1. Find overdue installments
-    const { rows: overdue } = await query(`
-      SELECT i.*, u.email, u.name as user_name, u.id as user_id
-      FROM installments i
-      JOIN orders o ON i.order_id = o.id
-      JOIN users u ON o.user_id = u.id
-      WHERE i.next_payment_date < CURRENT_DATE
-      AND i.status != 'completed'
-    `);
+    const { data: overdue, error: fetchError } = await supabase
+      .from('installments')
+      .select('*, users:user_id(email, name)')
+      .lt('next_payment_date', new Date().toISOString())
+      .neq('status', 'completed');
 
-    console.log(`Found ${overdue.length} overdue installments.`);
+    if (fetchError) throw fetchError;
 
-    for (const inst of overdue) {
+    console.log(`Found ${overdue?.length || 0} overdue installments.`);
+
+    for (const inst of (overdue || [])) {
+      const user = inst.users;
+      if (!user) continue;
+
       const daysOverdue = Math.floor((new Date() - new Date(inst.next_payment_date)) / (1000 * 60 * 60 * 24));
       
       // 2. Apply Late Fees if beyond grace period
-      if (daysOverdue >= GRACE_PERIOD_DAYS && inst.late_fees_accrued == 0) {
+      if (daysOverdue >= GRACE_PERIOD_DAYS && (inst.late_fees_accrued || 0) == 0) {
         const lateFee = parseFloat(inst.remaining_balance) * LATE_FEE_PERCENTAGE;
-        console.log(`Applying late fee of ₦${lateFee} to installment ${inst.id} (User: ${inst.user_name})`);
+        console.log(`Applying late fee of ₦${lateFee} to installment ${inst.id} (User: ${user.name})`);
         
-        await query(
-          "UPDATE installments SET late_fees_accrued = late_fees_accrued + $1, remaining_balance = remaining_balance + $1 WHERE id = $2",
-          [lateFee, inst.id]
-        );
+        const newBalance = parseFloat(inst.remaining_balance) + lateFee;
+        await supabase
+          .from('installments')
+          .update({ 
+            late_fees_accrued: lateFee, 
+            remaining_balance: newBalance 
+          })
+          .eq('id', inst.id);
 
         // Notify User
         await sendEmail({
-          to: inst.email,
+          to: user.email,
           subject: 'Late Fee Applied - GadgetFlex',
-          text: `Hi ${inst.user_name}, a late fee of ₦${lateFee} has been applied to your overdue installment. Please settle your balance to avoid further penalties.`
+          text: `Hi ${user.name}, a late fee of ₦${lateFee} has been applied to your overdue installment. Please settle your balance to avoid further penalties.`
         });
       }
 
       // 3. Auto-Retry Payment if cards are on file
-      const { rows: cards } = await query(
-        "SELECT authorization_code FROM auto_debit_subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1",
-        [inst.user_id]
-      );
+      // Assuming auto_debit_subscriptions table exists in Supabase
+      const { data: cards, error: cardError } = await supabase
+        .from('auto_debit_subscriptions')
+        .select('authorization_code')
+        .eq('user_id', inst.user_id)
+        .eq('status', 'active')
+        .limit(1);
 
-      if (cards.length > 0) {
+      if (!cardError && cards && cards.length > 0) {
         console.log(`Attempting auto-retry for overdue installment ${inst.id}...`);
         const authCode = cards[0].authorization_code;
         
-        // Only retry every 3 days to avoid spamming the user's bank
+        // Only retry every 3 days
         const lastRetry = inst.last_collection_retry ? new Date(inst.last_collection_retry) : null;
         const daysSinceLastRetry = lastRetry ? Math.floor((new Date() - lastRetry) / (1000 * 60 * 60 * 24)) : 99;
 
         if (daysSinceLastRetry >= 3) {
           try {
-            const success = await chargeAuthorization(inst.email, inst.remaining_balance, authCode);
+            const success = await chargeAuthorization(user.email, inst.remaining_balance, authCode);
             if (success) {
               console.log(`✅ Auto-retry successful for ${inst.id}`);
-              await query(
-                "UPDATE installments SET remaining_balance = 0, status = 'completed' WHERE id = $1",
-                [inst.id]
-              );
+              await supabase
+                .from('installments')
+                .update({ remaining_balance: 0, status: 'completed' })
+                .eq('id', inst.id);
             } else {
               console.warn(`❌ Auto-retry failed for ${inst.id}`);
-              await query("UPDATE installments SET last_collection_retry = CURRENT_DATE WHERE id = $1", [inst.id]);
+              await supabase
+                .from('installments')
+                .update({ last_collection_retry: new Date().toISOString() })
+                .eq('id', inst.id);
             }
           } catch (err) {
             console.error(`Retry error for ${inst.id}:`, err.message);
